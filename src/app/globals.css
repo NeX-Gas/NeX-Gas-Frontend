@@ -1,0 +1,133 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+
+  /* Surfaces */
+  --color-canvas: #f9f9ff;
+  --color-surface: #ffffff;
+
+  /* Text */
+  --color-ink: #141b2b;
+  --color-ink-2: #3c4a42;
+  --color-muted: #555f6d;
+  --color-muted-2: #596372;
+
+  /* Brand / green */
+  --color-brand: #006c49;
+  --color-brand-dark: #00422b;
+  --color-brand-deep: #005236;
+  --color-brand-400: #10b981;
+  --color-brand-300: #4edea3;
+  --color-brand-200: #6ffbbe;
+
+  /* Info / blue */
+  --color-info-50: #f1f3ff;
+  --color-info-100: #e9edff;
+  --color-info-200: #e1e8fd;
+  --color-info-300: #dce2f7;
+  --color-info-400: #d6e0f1;
+  --color-info-500: #d9e3f4;
+
+  /* Danger / red */
+  --color-danger: #a43a3a;
+  --color-danger-400: #fc7c78;
+  --color-danger-300: #ffb3af;
+  --color-danger-200: #ffdad7;
+  --color-danger-700: #842225;
+  --color-danger-800: #711419;
+  --color-danger-900: #410005;
+
+  --color-line: #bbcabf;
+
+  --radius-card: 0.75rem;
+}
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+  }
+
+  * {
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+@utility card-shadow {
+  box-shadow:
+    0 1px 2px rgba(20, 27, 43, 0.04),
+    0 4px 16px rgba(20, 27, 43, 0.05);
+}
+
+@utility card-shadow-lg {
+  box-shadow:
+    0 2px 4px rgba(20, 27, 43, 0.06),
+    0 12px 32px rgba(20, 27, 43, 0.1);
+}
+
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@keyframes grow-bar {
+  from {
+    transform: scaleY(0.02);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes gauge-draw {
+  from {
+    stroke-dashoffset: 508;
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@utility animate-grow-bar {
+  transform-origin: bottom;
+  animation: grow-bar 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@utility animate-gauge {
+  animation: gauge-draw 1s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@utility animate-fade-up {
+  animation: fade-up 0.4s ease-out both;
+}
+
+@utility animate-toast-in {
+  animation: toast-in 0.25s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
