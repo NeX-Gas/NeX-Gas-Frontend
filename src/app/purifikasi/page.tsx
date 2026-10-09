@@ -44,7 +44,7 @@ function IllustrationCard({ className }: { className?: string }) {
       )}
     >
       <Image
-        src="/filter-illustration.png"
+        src={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/filter-illustration.png`}
         alt="Ilustrasi sistem filtrasi biogas"
         fill
         sizes="(max-width: 1024px) 100vw, 40vw"
