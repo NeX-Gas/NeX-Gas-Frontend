@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowLeft, Bell, User } from "lucide-react";
+import { Bell, User } from "lucide-react";
 import { Logo, LogoMark } from "@/components/logo";
 import { useAppStore } from "@/components/app-store";
+import { StatusPill } from "@/components/ui";
 import { navItems, pageTitles } from "@/lib/nav";
+import { relativeTime } from "@/lib/format";
 import { cn } from "@/lib/cn";
 
 function useActive() {
@@ -15,16 +17,25 @@ function useActive() {
   return { pathname, isActive };
 }
 
+const linkText = {
+  live: { label: "Live", tone: "good" as const },
+  demo: { label: "Demo", tone: "neutral" as const },
+  connecting: { label: "Menyambung", tone: "warn" as const },
+  offline: { label: "Offline", tone: "danger" as const },
+};
+
 function Sidebar() {
   const { isActive } = useActive();
-  const { criticalCount } = useAppStore();
+  const { criticalCount, link, deviceId, firmware } = useAppStore();
+  const state = linkText[link];
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r border-info-100 bg-surface lg:flex">
-      <div className="px-6 py-6">
+    <aside className="fixed inset-y-0 left-0 z-40 hidden w-60 flex-col border-r border-line/40 bg-surface lg:flex">
+      <div className="border-b border-line/35 px-5 py-5">
         <Logo subtitle="Monitoring Biogas" />
       </div>
-      <nav className="flex flex-1 flex-col gap-1 px-3">
+
+      <nav className="flex flex-1 flex-col gap-0.5 px-3 py-4">
         {navItems.map((item) => {
           const active = isActive(item.href);
           const Icon = item.icon;
@@ -32,17 +43,21 @@ function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
+              aria-current={active ? "page" : undefined}
               className={cn(
-                "group flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold transition-colors",
+                "relative flex h-9 items-center gap-2.5 rounded-[4px] px-2.5 text-[13px] font-medium transition-colors",
                 active
-                  ? "bg-info-100 text-brand"
-                  : "text-ink-2 hover:bg-info-50 hover:text-ink",
+                  ? "bg-info-50 text-brand-deep"
+                  : "text-ink-2 hover:bg-info-50/70 hover:text-ink",
               )}
             >
-              <Icon className="size-5" strokeWidth={2} />
+              {active ? (
+                <span className="absolute top-2 bottom-2 left-0 w-0.5 bg-brand" />
+              ) : null}
+              <Icon className="size-4 shrink-0" strokeWidth={active ? 2 : 1.75} />
               <span className="flex-1">{item.label}</span>
               {item.href === "/notifikasi" && criticalCount > 0 ? (
-                <span className="grid size-5 place-items-center rounded-full bg-danger text-[11px] font-bold text-white">
+                <span className="font-mono text-[11px] font-semibold text-danger">
                   {criticalCount}
                 </span>
               ) : null}
@@ -50,83 +65,93 @@ function Sidebar() {
           );
         })}
       </nav>
-      <div className="m-3 rounded-xl bg-info-50 p-4">
-        <div className="flex items-center gap-2">
-          <span className="size-2 rounded-full bg-brand-400" />
-          <span className="text-[13px] font-semibold text-ink">Unit #01 Online</span>
+
+      <Link
+        href="/pengaturan"
+        className="mx-3 mb-3 rounded-[4px] border border-line/50 px-3 py-2.5 transition-colors hover:bg-info-50/60"
+      >
+        <div className="flex items-center justify-between gap-2">
+          <span className="font-mono text-[11px] text-muted">{deviceId}</span>
+          <StatusPill tone={state.tone}>{state.label}</StatusPill>
         </div>
-        <p className="mt-1 text-[12px] leading-4 text-ink-2">
-          Telemetri nirkabel aktif • sinyal penuh
+        <p className="mt-1 font-mono text-[10.5px] text-muted">
+          firmware {firmware}
         </p>
-      </div>
+      </Link>
     </aside>
   );
 }
 
 function MobileHeader() {
   const { pathname } = useActive();
-  const isDetail = pathname.startsWith("/purifikasi");
-  const label = pageTitles[pathname] ?? "Home";
+  const route = pathname.replace(/\/$/, "") || "/";
+  const label = pageTitles[route] ?? "Beranda";
+  const { link } = useAppStore();
+  const state = linkText[link];
 
   return (
-    <header className="sticky top-0 z-40 border-b border-info-50 bg-canvas/85 backdrop-blur-md lg:hidden">
-      <div className="mx-auto flex h-16 max-w-md items-center gap-3 px-4">
-        {isDetail ? (
-          <Link
-            href="/"
-            aria-label="Kembali"
-            className="grid size-10 -ml-2 shrink-0 place-items-center rounded-lg text-ink hover:bg-info-100"
-          >
-            <ArrowLeft className="size-5" />
-          </Link>
-        ) : (
-          <LogoMark className="size-9 rounded-xl" />
-        )}
+    <header className="sticky top-0 z-40 border-b border-line/40 bg-canvas/92 backdrop-blur-md lg:hidden">
+      <div className="flex h-14 items-center gap-2.5 px-4">
+        <LogoMark className="size-7 rounded-[4px]" />
         <div className="flex min-w-0 flex-col">
-          <span className="text-[15px] leading-none font-semibold tracking-tight text-ink">
+          <span className="text-[11px] leading-none font-medium tracking-[0.09em] text-muted uppercase">
             NEX-GAS
           </span>
-          <span className="mt-1 truncate text-[12px] leading-none font-semibold text-ink-2">
+          <span className="mt-1 truncate text-[13px] leading-none font-semibold text-ink">
             {label}
           </span>
         </div>
-        <button
-          type="button"
-          aria-label="Profil"
-          className="ml-auto grid size-9 place-items-center rounded-full bg-brand text-white"
-        >
-          <User className="size-4" />
-        </button>
+        <div className="ml-auto flex items-center gap-3">
+          <StatusPill tone={state.tone}>{state.label}</StatusPill>
+          <button
+            type="button"
+            aria-label="Profil"
+            className="grid size-8 place-items-center rounded-[4px] border border-line/50 bg-surface text-ink-2"
+          >
+            <User className="size-3.5" strokeWidth={1.75} />
+          </button>
+        </div>
       </div>
     </header>
   );
 }
 
 function DesktopTopBar() {
-  const { unreadCount } = useAppStore();
+  const { unreadCount, lastSeen, link, deviceId } = useAppStore();
+  const state = linkText[link];
+
   return (
-    <header className="hidden items-center justify-between px-8 pt-6 pb-2 lg:flex">
-      <div className="inline-flex items-center gap-2 rounded-full bg-surface px-3 py-1.5 text-[13px] font-semibold text-ink-2 card-shadow">
-        <span className="size-2 rounded-full bg-brand-400" />
-        Unit #01 • Kandang Sapi Barat
+    <header className="hidden h-12 items-center justify-between border-b border-line/35 px-8 lg:flex">
+      <div className="flex items-center gap-2 text-[12px] text-ink-2">
+        <span className="font-mono text-muted">{deviceId}</span>
+        <span className="text-line">/</span>
+        <span>Digester Aktif</span>
+        <span className="text-line">/</span>
+        <span className="text-muted">Kandang Sapi Barat</span>
       </div>
-      <div className="flex items-center gap-3">
+
+      <div className="flex items-center gap-4">
+        <span className="flex items-center gap-2 font-mono text-[11px] text-muted">
+          <StatusPill tone={state.tone}>{state.label}</StatusPill>
+          <span className="text-line">·</span>
+          {relativeTime(lastSeen)}
+        </span>
         <Link
           href="/notifikasi"
           aria-label="Notifikasi"
-          className="relative grid size-10 place-items-center rounded-full bg-surface text-ink-2 card-shadow hover:text-ink"
+          className="relative grid size-8 place-items-center rounded-[4px] text-ink-2 transition-colors hover:bg-info-50 hover:text-ink"
         >
-          <Bell className="size-5" />
+          <Bell className="size-4" strokeWidth={1.75} />
           {unreadCount > 0 ? (
-            <span className="absolute right-2.5 top-2.5 size-2 rounded-full bg-danger ring-2 ring-surface" />
+            <span className="absolute top-1.5 right-1.5 size-1.5 rounded-[1px] bg-danger ring-2 ring-canvas" />
           ) : null}
         </Link>
         <button
           type="button"
           aria-label="Profil"
-          className="grid size-10 place-items-center rounded-full bg-brand text-white"
+          className="grid size-8 place-items-center rounded-[4px] border border-line/50 bg-surface text-ink-2"
         >
-          <User className="size-4" />
+          <User className="size-3.5" strokeWidth={1.75} />
         </button>
       </div>
     </header>
@@ -138,8 +163,8 @@ function BottomNav() {
   const { criticalCount } = useAppStore();
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-info-100 bg-canvas/90 backdrop-blur-md lg:hidden">
-      <div className="mx-auto flex h-20 max-w-md items-stretch justify-around px-1">
+    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-line/40 bg-canvas/95 backdrop-blur-md lg:hidden">
+      <div className="mx-auto flex h-16 max-w-md items-stretch justify-around px-1">
         {navItems.map((item) => {
           const active = isActive(item.href);
           const Icon = item.icon;
@@ -147,18 +172,27 @@ function BottomNav() {
             <Link
               key={item.href}
               href={item.href}
+              aria-current={active ? "page" : undefined}
               className={cn(
-                "flex flex-1 flex-col items-center justify-center gap-1.5 rounded-xl pt-2 transition-colors",
-                active ? "text-brand" : "text-ink-2",
+                "relative flex flex-1 flex-col items-center justify-center gap-1 transition-colors",
+                active ? "text-brand-deep" : "text-muted",
               )}
             >
+              {active ? (
+                <span className="absolute top-0 h-0.5 w-8 bg-brand" />
+              ) : null}
               <span className="relative">
-                <Icon className="size-5" strokeWidth={2} />
-                {item.href === "/notifikasi" && criticalCount > 0 && !active ? (
-                  <span className="absolute -right-1 -top-1 size-2.5 rounded-full bg-danger ring-2 ring-canvas" />
+                <Icon
+                  className="size-[18px]"
+                  strokeWidth={active ? 2 : 1.75}
+                />
+                {item.href === "/notifikasi" &&
+                criticalCount > 0 &&
+                !active ? (
+                  <span className="absolute -top-1 -right-1 size-1.5 rounded-[1px] bg-danger" />
                 ) : null}
               </span>
-              <span className="text-[12px] leading-none font-semibold">
+              <span className="text-[11px] leading-none font-medium">
                 {item.label}
               </span>
             </Link>
@@ -173,10 +207,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-dvh bg-canvas">
       <Sidebar />
-      <div className="lg:pl-64">
+      <div className="lg:pl-60">
         <MobileHeader />
         <DesktopTopBar />
-        <main className="mx-auto w-full max-w-md px-4 pt-4 pb-28 lg:max-w-5xl lg:px-8 lg:pt-4 lg:pb-16">
+        <main className="mx-auto w-full max-w-[1152px] px-4 pt-5 pb-24 lg:px-8 lg:pt-6 lg:pb-16">
           {children}
         </main>
       </div>

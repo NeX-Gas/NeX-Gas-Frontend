@@ -17,6 +17,14 @@ export function fmtUnit(value: number, unit: string, digits = 1): string {
   return text === "—" ? text : `${text} ${unit}`;
 }
 
+/** Ambil angka dari label bervolume seperti "1.8 m³ Gas" atau "2.1 m³". */
+export function parseVolume(label: string): number | null {
+  const match = label.match(/(\d+(?:[.,]\d+)?)/);
+  if (!match) return null;
+  const value = Number(match[1].replace(",", "."));
+  return Number.isFinite(value) ? value : null;
+}
+
 export function relativeTime(epochMs: number | null): string {
   if (!epochMs) return "belum ada data";
   const diff = Math.max(0, Date.now() - epochMs);

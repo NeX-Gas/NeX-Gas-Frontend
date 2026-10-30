@@ -1,184 +1,288 @@
 "use client";
 
 import {
-  Activity,
   Cpu,
-  Droplets,
   Filter,
-  Flame,
-  Gauge,
   Hand,
   Lock,
-  Siren,
   Unlock,
-  Wind,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Button } from "@/components/button";
 import {
-  Card,
-  IconTile,
+  MetricRow,
+  Panel,
+  PanelHead,
   ProgressBar,
+  Readout,
   SectionLabel,
   StatusPill,
 } from "@/components/ui";
 import { useAppStore } from "@/components/app-store";
 import { fmtValue, hasValue } from "@/lib/format";
 import { h2sTone, THRESHOLDS } from "@/lib/system";
-import type { Tone, ValveMode } from "@/lib/types";
+import type { ValveMode } from "@/lib/types";
 import { cn } from "@/lib/cn";
 
-function StatTile({
+/** Skala atas instrumen tekanan. Firmware menutup penampung di 2.0 kPa. */
+const PRESSURE_MAX = 2.5;
+
+function PressureBar({
   label,
   value,
-  unit,
-  icon: Icon,
-  tone = "neutral",
-  status,
-  hint,
+  tone,
 }: {
   label: string;
-  value: string;
-  unit: string;
-  icon: LucideIcon;
-  tone?: Tone;
-  status: string;
-  hint: string;
+  value: number;
+  tone: "brand" | "deep";
 }) {
-  const dot: Record<Tone, string> = {
-    good: "bg-brand-400",
-    neutral: "bg-muted",
-    warn: "bg-danger",
-    danger: "bg-danger-800",
-  };
+  const pct = hasValue(value)
+    ? Math.max(0, Math.min(100, (value / PRESSURE_MAX) * 100))
+    : 0;
+
   return (
-    <div className="flex flex-col gap-1.5 rounded-lg bg-info-50 p-3">
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-[11px] font-semibold tracking-[0.04em] text-muted uppercase">
-          {label}
-        </span>
-        <Icon className="size-4 shrink-0 text-muted" />
+    <div className="flex flex-col items-center gap-2">
+      <div className="relative h-32 w-12 overflow-hidden rounded-[2px] bg-info-100 sm:h-44 sm:w-14">
+        {/* garis skala 0.3 / 1.0 / 2.0 kPa dari firmware */}
+        {[
+          { kpa: THRESHOLDS.valveCloseAt, tone: "bg-ink/20" },
+          { kpa: THRESHOLDS.valveOpenAt, tone: "bg-brand/60" },
+          { kpa: THRESHOLDS.collectorFullAt, tone: "bg-danger/50" },
+        ].map((tick) => (
+          <span
+            key={tick.kpa}
+            className={cn("absolute inset-x-0 h-px", tick.tone)}
+            style={{ bottom: `${(tick.kpa / PRESSURE_MAX) * 100}%` }}
+          />
+        ))}
+        <div
+          className={cn(
+            "absolute inset-x-0 bottom-0 transition-[height] duration-700 ease-out",
+            tone === "deep" ? "bg-brand" : "bg-brand-400",
+          )}
+          style={{ height: `${pct}%` }}
+        />
       </div>
-      <div className="flex items-baseline gap-1">
-        <span className="text-[26px] leading-8 font-bold tracking-[-0.02em] text-ink">
-          {value}
-        </span>
-        <span className="text-xs font-semibold text-ink-2">{unit}</span>
+      <div className="text-center">
+        <Readout value={fmtValue(value, 2)} unit="kPa" size="sm" />
+        <p className="mt-0.5 text-[10.5px] leading-3.5 text-muted">{label}</p>
       </div>
-      <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-ink-2">
-        <span className={cn("size-2 rounded-full", dot[tone])} />
-        {status}
-      </span>
-      <p className="text-[11px] text-muted">{hint}</p>
     </div>
   );
 }
 
-export function GasMonitor({ className }: { className?: string }) {
+export function PressureInstrument({ className }: { className?: string }) {
+  const {
+    telemetry,
+    valveOpen,
+    leakWarning,
+    filterWarning,
+    pressureCalibrated,
+  } = useAppStore();
+  const { pressureDigester, pressureCollector, flow, gasSinceStartL } = telemetry;
+  const delta =
+    hasValue(pressureDigester) && hasValue(pressureCollector)
+      ? pressureDigester - pressureCollector
+      : null;
+  const collectorFull = pressureCollector >= THRESHOLDS.collectorFullAt;
+
+  const state = leakWarning
+    ? { text: "Aliran dihentikan — kebocoran", tone: "danger" as const }
+    : collectorFull
+      ? { text: "Penampung penuh", tone: "warn" as const }
+      : valveOpen
+        ? { text: "Gas mengalir", tone: "good" as const }
+        : pressureDigester >= THRESHOLDS.valveOpenAt
+          ? { text: "Siap — menunggu valve", tone: "good" as const }
+          : { text: "Menunggu tekanan", tone: "neutral" as const };
+
+  return (
+    <Panel className={cn("flex flex-col", className)}>
+      <PanelHead
+        label="Instrumen Tekanan"
+        title="Digester vs Penampung"
+        right={
+          <StatusPill tone={state.tone}>{state.text}</StatusPill>
+        }
+      />
+
+      <div className="flex flex-1 flex-col gap-5 p-4 sm:flex-row sm:gap-6">
+        {/* kolom instrumen */}
+        <div className="flex items-start justify-center gap-3 sm:justify-start sm:gap-4">
+          <div className="relative h-32 w-6 shrink-0 sm:h-44 sm:w-7">
+            {[
+              { v: PRESSURE_MAX, tone: "text-muted" },
+              { v: THRESHOLDS.collectorFullAt, tone: "text-danger" },
+              { v: THRESHOLDS.valveOpenAt, tone: "text-brand" },
+              { v: 0, tone: "text-muted" },
+            ].map(({ v, tone }) => (
+              <span
+                key={v}
+                className={cn(
+                  "absolute right-0 translate-y-1/2 font-mono text-[9.5px] leading-none tnum",
+                  tone,
+                )}
+                style={{ bottom: `${(v / PRESSURE_MAX) * 100}%` }}
+              >
+                {v === 0 ? "0" : v.toFixed(1)}
+              </span>
+            ))}
+          </div>
+
+          <div className="flex gap-3 sm:gap-4">
+            <PressureBar
+              label="Digester"
+              value={pressureDigester}
+              tone="brand"
+            />
+            <PressureBar
+              label="Penampung"
+              value={pressureCollector}
+              tone="deep"
+            />
+          </div>
+        </div>
+
+        {/* pembacaan pendukung */}
+        <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5 sm:border-l sm:border-line/35 sm:pl-6">
+          <MetricRow
+            label="Δ tekanan"
+            hint="digester − penampung"
+            value={
+              delta === null
+                ? "—"
+                : `${delta >= 0 ? "+" : ""}${delta.toFixed(2)}`
+            }
+            unit="kPa"
+            tone={delta !== null && delta < 0 ? "danger" : "ink"}
+          />
+          <MetricRow
+            label="Aliran gas"
+            value={fmtValue(flow, 1)}
+            unit="L/jam"
+            tone="ink"
+          />
+          <MetricRow
+            label="Gas terkumpul"
+            value={fmtValue(gasSinceStartL, 1)}
+            unit="L"
+            tone="ink"
+          />
+          <MetricRow
+            label="Ambang valve"
+            hint="buka / tutup"
+            value={`${THRESHOLDS.valveOpenAt.toFixed(1)} / ${THRESHOLDS.valveCloseAt.toFixed(1)}`}
+            unit="kPa"
+            tone="muted"
+          />
+        </div>
+      </div>
+
+      <div className="flex items-start gap-2 border-t border-line/35 px-4 py-2.5">
+        <p className="text-[11.5px] leading-4 text-muted">
+          {!pressureCalibrated
+            ? "Mode otomatis terkunci: sensor tekanan belum dikalibrasi 2 titik (Pengaturan → Kalibrasi)."
+            : filterWarning
+              ? "Filter H₂S jenuh — ganti media sebelum aliran berlanjut."
+              : "Valve fail-safe N/C. Garis hijau = ambang buka, garis merah = penampung penuh."}
+        </p>
+      </div>
+    </Panel>
+  );
+}
+
+export function GasQuality({ className }: { className?: string }) {
   const { telemetry, filterWarning, leakWarning, filterHealth } = useAppStore();
   const { h2sBefore, h2sAfter, ch4, leak } = telemetry;
 
   const effectiveness =
     hasValue(h2sBefore) && hasValue(h2sAfter) && h2sBefore > 0
       ? Math.max(0, Math.min(100, Math.round((1 - h2sAfter / h2sBefore) * 100)))
-      : 0;
-  const beforeAvailable = hasValue(h2sBefore);
+      : null;
   const afterTone = h2sTone(h2sAfter);
-  const overall: Tone = leakWarning
-    ? "danger"
+  const status = leakWarning
+    ? { text: "Bahaya — bocor", tone: "danger" as const }
     : filterWarning
-      ? "warn"
-      : "good";
-  const overallText = leakWarning
-    ? "Bahaya"
-    : filterWarning
-      ? "Perlu Perhatian"
-      : "Aman";
+      ? { text: "Perlu perhatian", tone: "warn" as const }
+      : { text: "Aman", tone: "good" as const };
 
   return (
-    <Card className={cn("flex flex-col gap-4 p-4", className)}>
-      <div className="flex items-start justify-between gap-3">
+    <Panel className={cn("flex flex-col", className)}>
+      <PanelHead
+        label="Kualitas Gas"
+        title="H₂S & Metana"
+        right={<StatusPill tone={status.tone}>{status.text}</StatusPill>}
+      />
+
+      <div className="flex flex-col gap-4 p-4">
         <div>
-          <SectionLabel>Monitoring Gas</SectionLabel>
-          <h3 className="mt-1 text-lg font-semibold text-ink">
-            Kualitas Biogas
-          </h3>
+          <div className="flex items-baseline justify-between">
+            <SectionLabel>H₂S sesudah filter</SectionLabel>
+            <span className="font-mono text-[10.5px] text-muted">
+              &lt; {THRESHOLDS.h2sWarn} ppm
+            </span>
+          </div>
+          <div className="mt-1 flex items-baseline gap-2">
+            <Readout
+              value={fmtValue(h2sAfter, 1)}
+              unit="ppm"
+              size="xl"
+              tone={afterTone === "good" ? "ink" : "danger"}
+            />
+            <StatusPill tone={afterTone}>
+              {afterTone === "good"
+                ? "di bawah ambang"
+                : afterTone === "warn"
+                  ? "mendekati ambang"
+                  : "tembus filter"}
+            </StatusPill>
+          </div>
         </div>
-        <StatusPill tone={overall}>{overallText}</StatusPill>
-      </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <StatTile
-          label="H₂S Sebelum Filter"
-          value={fmtValue(h2sBefore, 1)}
-          unit="ppm"
-          icon={Wind}
-          tone="neutral"
-          status={beforeAvailable ? "Dari digester" : "Sensor belum terpasang"}
-          hint={
-            beforeAvailable
-              ? "Sensor MQ-136 inlet"
-              : "MQ-136 #2 belum dipasang (firmware kirim -1)"
-          }
-        />
-        <StatTile
-          label="H₂S Sesudah Filter"
-          value={fmtValue(h2sAfter, 1)}
-          unit="ppm"
-          icon={Filter}
-          tone={afterTone}
-          status={
-            afterTone === "good"
-              ? "Di bawah ambang"
-              : afterTone === "warn"
-                ? "Mendekati ambang"
-                : "Tembus filter!"
-          }
-          hint={`Ambang aman < ${THRESHOLDS.h2sWarn} ppm`}
-        />
-        <StatTile
-          label="Metana (CH₄)"
-          value={fmtValue(ch4, 0)}
-          unit="%"
-          icon={Flame}
-          tone="good"
-          status="Kandungan baik"
-          hint="Relatif • sensor MQ-4"
-        />
-        <StatTile
-          label="Kebocoran Metana"
-          value={fmtValue(leak, 0)}
-          unit="ppm"
-          icon={Siren}
-          tone={leakWarning ? "danger" : "good"}
-          status={leakWarning ? "Bocor terdeteksi" : "Normal"}
-          hint="MQ-4 udara sekitar"
-        />
-      </div>
+        <div className="inset px-3">
+          <MetricRow
+            label="H₂S sebelum filter"
+            value={hasValue(h2sBefore) ? fmtValue(h2sBefore, 1) : "—"}
+            unit={hasValue(h2sBefore) ? "ppm" : undefined}
+            tone={hasValue(h2sBefore) ? "ink" : "muted"}
+          />
+          <MetricRow
+            label="Metana"
+            hint="relatif"
+            value={fmtValue(ch4, 0)}
+            unit="%"
+          />
+          <MetricRow
+            label="Kebocoran metana"
+            value={fmtValue(leak, 0)}
+            unit="ppm"
+            tone={leakWarning ? "danger" : "ink"}
+          />
+          <MetricRow
+            label="Efektivitas purifikasi"
+            value={effectiveness === null ? "—" : effectiveness}
+            unit={effectiveness === null ? undefined : "%"}
+            tone={effectiveness === null ? "muted" : "ink"}
+          />
+        </div>
 
-      <div className="flex flex-col gap-2">
-        <div className="flex items-center justify-between text-[13px] font-semibold text-ink-2">
-          <span>Efektivitas Purifikasi H₂S</span>
-          <span className="text-ink">
-            {beforeAvailable ? `${effectiveness}%` : "—"}
-          </span>
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-baseline justify-between">
+            <span className="text-[12px] text-ink-2">Kesehatan media</span>
+            <Readout value={Math.round(filterHealth)} unit="%" size="sm" />
+          </div>
+          <ProgressBar
+            value={filterHealth}
+            tone={filterHealth < 40 ? "warn" : "good"}
+          />
+          {!hasValue(h2sBefore) ? (
+            <p className="text-[10.5px] leading-4 text-muted">
+              MQ-136 inlet belum terpasang — efektivitas tidak dihitung.
+            </p>
+          ) : null}
         </div>
-        <ProgressBar
-          value={effectiveness}
-          tone={effectiveness < 70 ? "warn" : "good"}
-          className="h-2.5"
-        />
-        <div className="mt-1 flex items-center justify-between text-[13px] font-semibold text-ink-2">
-          <span>Kesehatan Media Filter</span>
-          <span className="text-ink">{Math.round(filterHealth)}%</span>
-        </div>
-        <ProgressBar
-          value={filterHealth}
-          tone={filterHealth < 40 ? "warn" : "good"}
-          className="h-2.5"
-        />
       </div>
-    </Card>
+    </Panel>
   );
 }
 
@@ -194,284 +298,188 @@ export function ValveControl({ className }: { className?: string }) {
     pressureCalibrated,
     canCommand,
   } = useAppStore();
-  const delta = telemetry.pressureDigester - telemetry.pressureCollector;
+
   const modes: { key: ValveMode; label: string; icon: LucideIcon }[] = [
     { key: "auto", label: "Otomatis", icon: Cpu },
     { key: "manual", label: "Manual", icon: Hand },
   ];
 
   return (
-    <Card className={cn("flex flex-col gap-4 p-4", className)}>
-      <div>
-        <SectionLabel>Kontrol Aktuator</SectionLabel>
-        <h3 className="mt-1 text-lg font-semibold text-ink">
-          Solenoid Valve 12V
-        </h3>
-      </div>
+    <Panel className={cn("flex flex-col", className)}>
+      <PanelHead
+        label="Aktuator"
+        title="Solenoid Valve 12V"
+        right={
+          <StatusPill tone={valveOpen ? "good" : "neutral"}>
+            {valveOpen ? "Terbuka" : "Tertutup"}
+          </StatusPill>
+        }
+      />
 
-      <div className="flex gap-1 rounded-xl bg-info-50 p-1">
-        {modes.map((m) => {
-          const active = valveMode === m.key;
-          return (
-            <button
-              key={m.key}
-              type="button"
-              onClick={() => setValveMode(m.key)}
-              disabled={m.key === "auto" && !pressureCalibrated}
-              title={
-                m.key === "auto" && !pressureCalibrated
-                  ? "Kalibrasi tekanan 2 titik dulu"
-                  : undefined
-              }
-              className={cn(
-                "inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-lg text-[13px] font-semibold transition-colors",
-                active
-                  ? "bg-surface text-brand card-shadow"
-                  : "text-ink-2 hover:bg-info-100",
-                m.key === "auto" &&
-                  !pressureCalibrated &&
-                  "cursor-not-allowed opacity-40",
-              )}
-            >
-              <m.icon className="size-4" />
-              {m.label}
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="flex flex-col items-center gap-2 py-1">
-        <span
-          className={cn(
-            "grid size-16 place-items-center rounded-full transition-colors",
-            valveOpen ? "bg-brand text-white" : "bg-info-200 text-ink-2",
-          )}
+      <div className="flex flex-1 flex-col gap-3 p-4">
+        <div
+          role="group"
+          aria-label="Mode valve"
+          className="flex gap-0.5 rounded-[4px] bg-info-100 p-0.5"
         >
-          {valveOpen ? (
-            <Unlock className="size-8" />
-          ) : (
-            <Lock className="size-8" />
-          )}
-        </span>
-        <p
-          className={cn(
-            "text-lg font-bold",
-            valveOpen ? "text-brand" : "text-ink",
-          )}
-        >
-          {valveOpen ? "TERBUKA" : "TERTUTUP"}
-        </p>
-        <p className="text-center text-sm text-ink-2">
-          {valveOpen
-            ? "Gas mengalir lewat filter ke penampung"
-            : "Gas terkumpul di digester"}
-        </p>
-      </div>
-
-      <div className="grid grid-cols-2 gap-2">
-        <Button
-          icon={Unlock}
-          disabled={valveMode !== "manual" || valveOpen}
-          onClick={openValve}
-        >
-          Buka Valve
-        </Button>
-        <Button
-          variant="secondary"
-          icon={Lock}
-          disabled={valveMode !== "manual" || !valveOpen}
-          onClick={closeValve}
-        >
-          Tutup Valve
-        </Button>
-      </div>
-
-      <div className="flex flex-col gap-1 rounded-lg bg-info-50 p-3 text-[12px] text-ink-2">
-        <div className="flex items-center justify-between">
-          <span>Aliran gas</span>
-          <span className="font-semibold text-ink">
-            {fmtValue(telemetry.flow, 1)} L/h
-          </span>
+          {modes.map((m) => {
+            const active = valveMode === m.key;
+            const locked = m.key === "auto" && !pressureCalibrated;
+            return (
+              <button
+                key={m.key}
+                type="button"
+                onClick={() => setValveMode(m.key)}
+                disabled={locked}
+                aria-pressed={active}
+                title={locked ? "Kalibrasi tekanan 2 titik dulu" : undefined}
+                className={cn(
+                  "inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-[3px] text-[12px] font-medium transition-colors",
+                  active
+                    ? "border border-line/50 bg-surface text-brand-deep"
+                    : "text-ink-2 hover:text-ink",
+                  locked && "cursor-not-allowed opacity-40",
+                )}
+              >
+                <m.icon className="size-3.5" strokeWidth={1.75} />
+                {m.label}
+              </button>
+            );
+          })}
         </div>
-        <div className="flex items-center justify-between">
-          <span>Δ tekanan (digester − penampung)</span>
-          <span className="font-semibold text-ink">
-            {hasValue(telemetry.pressureDigester) &&
-            hasValue(telemetry.pressureCollector)
-              ? `${delta >= 0 ? "+" : ""}${delta.toFixed(2)} kPa`
+
+        <div className="flex items-center gap-3">
+          <span
+            className={cn(
+              "grid size-9 place-items-center rounded-[4px]",
+              valveOpen
+                ? "bg-brand text-white"
+                : "border border-line/50 bg-surface text-ink-2",
+            )}
+          >
+            {valveOpen ? (
+              <Unlock className="size-4" strokeWidth={1.75} />
+            ) : (
+              <Lock className="size-4" strokeWidth={1.75} />
+            )}
+          </span>
+          <div className="min-w-0">
+            <p className="text-[13px] leading-4 font-semibold text-ink">
+              {valveOpen ? "Gas mengalir" : "Gas tertahan di digester"}
+            </p>
+            <p className="mt-0.5 text-[11px] leading-4 text-muted">
+              {valveOpen ? "Ke filter → penampung" : "Menunggu ambang tekanan"}
+            </p>
+          </div>
+        </div>
+
+        <div className="inset px-3">
+          <MetricRow
+            label="Aliran"
+            value={fmtValue(telemetry.flow, 1)}
+            unit="L/jam"
+          />
+          <MetricRow
+            label="Δ tekanan"
+            value={hasValue(telemetry.pressureDigester) && hasValue(telemetry.pressureCollector)
+              ? `${(telemetry.pressureDigester - telemetry.pressureCollector).toFixed(2)}`
               : "—"}
-          </span>
+            unit="kPa"
+          />
         </div>
+
         {leakWarning ? (
-          <p className="mt-1 font-semibold text-danger">
+          <p className="text-[11px] leading-4 font-medium text-danger">
             Kebocoran metana — valve dipaksa tertutup (fail-safe).
           </p>
-        ) : !pressureCalibrated ? (
-          <p className="mt-1 font-semibold text-danger">
-            Mode otomatis terkunci: sensor tekanan belum dikalibrasi 2 titik
-            (Pengaturan → Kalibrasi).
+        ) : !canCommand ? (
+          <p className="text-[11px] leading-4 text-muted">
+            Perintah belum tersambung ke alat (mode demo / backend offline).
           </p>
-        ) : (
-          <p className="mt-1 text-muted">
-            Buka ≥ {THRESHOLDS.valveOpenAt.toFixed(1)} kPa · Tutup ≤{" "}
-            {THRESHOLDS.valveCloseAt.toFixed(1)} kPa · Fail-safe N/C
-            {canCommand ? "" : " · perintah belum tersambung ke alat"}
-          </p>
-        )}
-      </div>
-    </Card>
-  );
-}
-
-export function PressureMonitor({ className }: { className?: string }) {
-  const {
-    telemetry,
-    valveOpen,
-    leakWarning,
-    filterWarning,
-    pressureCalibrated,
-  } = useAppStore();
-  const { pressureDigester, pressureCollector } = telemetry;
-
-  const digesterPct = Math.max(0, Math.min(100, (pressureDigester / 2) * 100));
-  const collectorPct = Math.max(0, Math.min(100, (pressureCollector / 2) * 100));
-  const collectorFull = pressureCollector >= THRESHOLDS.collectorFullAt;
-
-  const status = leakWarning
-    ? "Kebocoran terdeteksi — aliran dihentikan"
-    : collectorFull
-      ? "Penampung penuh — valve tertutup"
-      : valveOpen
-        ? "Gas mengalir ke kantung penampung"
-        : pressureDigester >= THRESHOLDS.valveOpenAt
-          ? "Tekanan siap — menunggu pembukaan valve"
-          : "Menunggu akumulasi tekanan gas";
-
-  return (
-    <Card className={cn("flex flex-col gap-4 p-4", className)}>
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <SectionLabel>Tekanan Sistem</SectionLabel>
-          <h3 className="mt-1 text-lg font-semibold text-ink">
-            Digester vs Penampung
-          </h3>
-        </div>
-        {!pressureCalibrated ? (
-          <StatusPill tone="warn">Belum terkalibrasi</StatusPill>
-        ) : filterWarning ? (
-          <StatusPill tone="warn">Filter jenuh</StatusPill>
         ) : null}
-      </div>
 
-      <div className="flex flex-col gap-1.5">
-        <div className="flex items-center justify-between text-[13px] font-semibold text-ink-2">
-          <span className="flex items-center gap-1.5">
-            <Gauge className="size-4 text-brand" />
-            Tekanan Digester
-          </span>
-          <span className="text-ink">
-            {fmtValue(pressureDigester, 2)} kPa
-          </span>
+        <div className="mt-auto grid grid-cols-2 gap-2">
+          <Button
+            size="sm"
+            icon={Unlock}
+            disabled={valveMode !== "manual" || valveOpen}
+            onClick={openValve}
+          >
+            Buka
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            icon={Lock}
+            disabled={valveMode !== "manual" || !valveOpen}
+            onClick={closeValve}
+          >
+            Tutup
+          </Button>
         </div>
-        <ProgressBar
-          value={digesterPct}
-          tone="good"
-          thresholds={[
-            { at: 15, tone: "normal" },
-            { at: 50, tone: "warn" },
-          ]}
-          className="h-3"
-        />
-        <p className="text-[11px] text-muted">
-          Ambang buka {THRESHOLDS.valveOpenAt.toFixed(1)} kPa · histeresis tutup{" "}
-          {THRESHOLDS.valveCloseAt.toFixed(1)} kPa
-        </p>
       </div>
-
-      <div className="flex flex-col gap-1.5">
-        <div className="flex items-center justify-between text-[13px] font-semibold text-ink-2">
-          <span className="flex items-center gap-1.5">
-            <Activity className="size-4 text-brand" />
-            Tekanan Penampung
-          </span>
-          <span className="text-ink">
-            {fmtValue(pressureCollector, 2)} kPa
-          </span>
-        </div>
-        <ProgressBar
-          value={collectorPct}
-          tone={collectorFull ? "warn" : "good"}
-          thresholds={[{ at: 100, tone: "warn" }]}
-          className="h-3"
-        />
-        <p className="text-[11px] text-muted">
-          Batas penampung penuh {THRESHOLDS.collectorFullAt.toFixed(1)} kPa
-        </p>
-      </div>
-
-      <div className="flex items-center gap-2 rounded-lg bg-info-50 p-3">
-        <Droplets className="size-4 shrink-0 text-brand" />
-        <p className="text-[13px] font-semibold text-ink">{status}</p>
-      </div>
-    </Card>
+    </Panel>
   );
 }
 
-export function FilterMaintenanceCard({ className }: { className?: string }) {
+export function FilterPanel({ className }: { className?: string }) {
   const { filterHealth, telemetry, leakWarning, resetFilterMaintenance } =
     useAppStore();
   const remaining = Math.max(0, Math.round(filterHealth * 0.45));
 
   return (
-    <Card className={cn("flex flex-col gap-4 p-4", className)}>
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <SectionLabel>Perawatan Filter</SectionLabel>
-          <h3 className="mt-1 text-lg font-semibold text-ink">
-            Kesehatan Media
-          </h3>
-        </div>
-        <IconTile
-          icon={Filter}
-          tone={filterHealth < 40 ? "danger" : "info"}
-        />
-      </div>
+    <Panel className={cn("flex flex-col", className)}>
+      <PanelHead
+        label="Perawatan"
+        title="Media Filter"
+        right={
+          <StatusPill tone={filterHealth < 40 ? "warn" : "good"}>
+            {filterHealth < 40 ? "Segera ganti" : "Aktif"}
+          </StatusPill>
+        }
+      />
 
-      <div className="flex flex-col gap-2">
-        <div className="flex items-center justify-between text-[13px] font-semibold text-ink-2">
-          <span>Sisa umur efektif</span>
-          <span className="text-ink">{remaining} hari</span>
+      <div className="flex flex-1 flex-col gap-3 p-4">
+        <div className="flex items-baseline justify-between">
+          <Readout value={remaining} unit="hari" size="lg" />
+          <Readout
+            value={Math.round(filterHealth)}
+            unit="% sisa"
+            size="sm"
+            tone="muted"
+          />
         </div>
         <ProgressBar
           value={filterHealth}
           tone={filterHealth < 40 ? "warn" : "good"}
-          className="h-3"
         />
-      </div>
+        <p className="text-[11px] leading-4 text-muted">
+          Estimasi dari laju penyerapan H₂S saat ini.
+        </p>
 
-      <div className="flex flex-col gap-1 rounded-lg bg-info-50 p-3 text-[12px] text-ink-2">
-        <div className="flex items-center justify-between">
-          <span>H₂S sesudah filter</span>
-          <span className="font-semibold text-ink">
-            {fmtValue(telemetry.h2sAfter, 1)} ppm
-          </span>
+        <div className="inset mt-1 px-3">
+          <MetricRow
+            label="H₂S sesudah filter"
+            value={fmtValue(telemetry.h2sAfter, 1)}
+            unit="ppm"
+          />
+          <MetricRow
+            label="Sensor kebocoran"
+            value={leakWarning ? "Peringatan" : "Normal"}
+            tone={leakWarning ? "danger" : "ink"}
+          />
         </div>
-        <div className="flex items-center justify-between">
-          <span>Status sensor</span>
-          <span className="font-semibold text-ink">
-            {leakWarning ? "Peringatan bocor" : "Normal"}
-          </span>
-        </div>
-      </div>
 
-      <Button
-        variant="soft"
-        icon={Filter}
-        onClick={resetFilterMaintenance}
-        className="w-full"
-      >
-        Tandai Filter Sudah Diganti
-      </Button>
-    </Card>
+        <Button
+          size="sm"
+          variant="secondary"
+          icon={Filter}
+          onClick={resetFilterMaintenance}
+          className="mt-auto w-full"
+        >
+          Tandai filter diganti
+        </Button>
+      </div>
+    </Panel>
   );
 }

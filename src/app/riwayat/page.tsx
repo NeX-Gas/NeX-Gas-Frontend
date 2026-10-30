@@ -1,40 +1,39 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import {
-  ClipboardList,
-  Fuel,
-  Plus,
-  TrendingDown,
-  TrendingUp,
-} from "lucide-react";
+import { ClipboardPlus, Fuel, TrendingDown, TrendingUp } from "lucide-react";
 import { Button } from "@/components/button";
 import { LogInputModal } from "@/components/log-modal";
 import { ProductionChart, type Bar } from "@/components/production-chart";
-import { Card, ScreenTitle, SectionLabel, StatusPill } from "@/components/ui";
+import {
+  Panel,
+  PanelHead,
+  Readout,
+  ScreenTitle,
+  SectionLabel,
+  StatusPill,
+} from "@/components/ui";
 import { useAppStore } from "@/components/app-store";
+import { parseVolume } from "@/lib/format";
 import { weeklyProduction } from "@/lib/mock";
 import { cn } from "@/lib/cn";
 
 type Period = "harian" | "mingguan" | "bulanan";
 
-const datasets: Record<
-  Period,
-  {
-    label: string;
-    total: string;
-    suffix: string;
-    target: number;
-    unit: string;
-    data: Bar[];
-  }
-> = {
+type Dataset = {
+  label: string;
+  total: number;
+  suffix: string;
+  target: number;
+  data: Bar[];
+};
+
+const datasets: Record<Period, Dataset> = {
   harian: {
     label: "Harian",
-    total: "4.0 m³",
-    suffix: "/ hari ini",
+    total: 4.0,
+    suffix: "hari ini",
     target: 1,
-    unit: "m³",
     data: [
       { label: "06", value: 0.4 },
       { label: "09", value: 0.6 },
@@ -46,18 +45,16 @@ const datasets: Record<
   },
   mingguan: {
     label: "Mingguan",
-    total: "11.9 m³",
-    suffix: "/ 7 hari terakhir",
+    total: 11.9,
+    suffix: "7 hari terakhir",
     target: 1.5,
-    unit: "m³",
     data: weeklyProduction,
   },
   bulanan: {
     label: "Bulanan",
-    total: "48.6 m³",
-    suffix: "/ 30 hari terakhir",
+    total: 48.6,
+    suffix: "30 hari terakhir",
     target: 12,
-    unit: "m³",
     data: [
       { label: "M1", value: 11.9 },
       { label: "M2", value: 13.2 },
@@ -67,7 +64,7 @@ const datasets: Record<
   },
 };
 
-function Segmented({
+function PeriodSwitch({
   value,
   onChange,
 }: {
@@ -75,7 +72,11 @@ function Segmented({
   onChange: (p: Period) => void;
 }) {
   return (
-    <div className="flex gap-1 rounded-xl bg-info-50 p-1 card-shadow">
+    <div
+      role="group"
+      aria-label="Periode data"
+      className="flex gap-0.5 rounded-[4px] bg-info-100 p-0.5"
+    >
       {(Object.keys(datasets) as Period[]).map((key) => {
         const active = value === key;
         return (
@@ -83,11 +84,12 @@ function Segmented({
             key={key}
             type="button"
             onClick={() => onChange(key)}
+            aria-pressed={active}
             className={cn(
-              "h-12 flex-1 rounded-lg text-[15px] font-semibold transition-colors",
+              "h-7 rounded-[3px] px-2.5 text-[11.5px] font-medium transition-colors",
               active
-                ? "bg-surface text-brand card-shadow"
-                : "text-ink-2 hover:bg-info-100",
+                ? "border border-line/50 bg-surface text-brand-deep"
+                : "text-ink-2 hover:text-ink",
             )}
           >
             {datasets[key].label}
@@ -98,53 +100,82 @@ function Segmented({
   );
 }
 
-function SavingsCard() {
-  return (
-    <Card className="relative overflow-hidden bg-brand p-4 text-white">
-      <span className="pointer-events-none absolute -right-4 -bottom-6 size-32 rounded-full bg-white/10" />
-      <div className="relative flex items-start gap-4">
-        <span className="grid size-14 shrink-0 place-items-center rounded-xl bg-surface">
-          <Fuel className="size-7 text-brand" />
-        </span>
-        <div>
-          <p className="text-[11px] font-semibold tracking-[0.08em] text-white/75 uppercase">
-            Pengganti Tabung LPG
-          </p>
-          <h3 className="mt-1 text-lg leading-[1.25] font-semibold">
-            Setara 12.5 kg LPG Dihemat
-            <br />
-            Bulan Ini
-          </h3>
-        </div>
-      </div>
-      <div className="relative mt-4 flex items-center gap-2 border-t border-white/25 pt-3">
-        <TrendingDown className="size-4 shrink-0" />
-        <span className="text-base font-bold">Hemat Rp 150.000</span>
-        <span className="text-sm text-white/70">/ bln</span>
-      </div>
-      <div className="relative mt-3">
-        <span className="inline-flex rounded-full bg-surface px-2.5 py-1 text-[13px] font-semibold text-brand">
-          Bebas Beli Gas Melon
-        </span>
-      </div>
-    </Card>
-  );
-}
+function SavingsPanel({
+  total,
+  className,
+}: {
+  total: number;
+  className?: string;
+}) {
+  // Konversi kasar: 1 m³ biogas ≈ 0.45 kg LPG.
+  const lpg = total * 0.45;
+  const rupiah = Math.round(lpg * 12000);
 
-function QuickAction({ onLog }: { onLog: () => void }) {
   return (
-    <Card className="flex items-center gap-3 p-4">
-      <span className="grid size-10 shrink-0 place-items-center rounded-full bg-info-400 text-muted-2">
-        <Plus className="size-4" />
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="text-[15px] text-ink">Catat Muatan Hari Ini</p>
-        <p className="text-sm text-ink-2">Menjaga produksi tetap stabil</p>
+    <Panel
+      className={cn(
+        "flex flex-col overflow-hidden border-brand-dark/40 bg-brand text-white",
+        className,
+      )}
+    >
+      <div className="flex items-center gap-2 border-b border-white/20 px-4 py-2.5">
+        <Fuel className="size-3.5 text-brand-300" strokeWidth={1.75} />
+        <SectionLabel className="text-white/70">Pengganti LPG</SectionLabel>
       </div>
-      <Button variant="soft" size="sm" onClick={onLog} className="shrink-0">
-        + Isi Log
-      </Button>
-    </Card>
+
+      <div className="flex flex-1 flex-col gap-3 p-4">
+        <div>
+          <p className="text-[11px] tracking-[0.06em] text-white/60 uppercase">
+            Setara tabung terhemat
+          </p>
+          <div className="mt-1 flex items-baseline gap-1.5">
+            <span className="font-mono text-[32px] leading-9 font-medium tnum">
+              {lpg.toFixed(1)}
+            </span>
+            <span className="font-mono text-[12px] text-brand-200">kg</span>
+          </div>
+        </div>
+
+        <div className="rounded-[4px] bg-black/15 px-3 py-2">
+          <div className="flex items-baseline justify-between">
+            <span className="text-[11px] text-white/70">Nilai rupiah</span>
+            <span className="flex items-baseline gap-1 font-mono tnum">
+              <span className="text-[10.5px] text-white/60">Rp</span>
+              <span className="text-[17px] leading-5 font-medium">
+                {rupiah.toLocaleString("id-ID")}
+              </span>
+            </span>
+          </div>
+        </div>
+
+        <div className="flex flex-col">
+          <div className="flex items-baseline justify-between border-b border-white/15 py-1.5">
+            <span className="text-[11.5px] text-white/70">Volume biogas</span>
+            <span className="font-mono text-[12px] tnum">
+              {total.toFixed(1)} m³
+            </span>
+          </div>
+          <div className="flex items-baseline justify-between border-b border-white/15 py-1.5">
+            <span className="text-[11.5px] text-white/70">
+              Setara tabung 3 kg
+            </span>
+            <span className="font-mono text-[12px] tnum">
+              {(lpg / 3).toFixed(1)} tabung
+            </span>
+          </div>
+          <div className="flex items-baseline justify-between py-1.5">
+            <span className="text-[11.5px] text-white/70">Harga acuan LPG</span>
+            <span className="font-mono text-[12px] tnum">Rp 12.000/kg</span>
+          </div>
+        </div>
+
+        <p className="mt-auto flex items-start gap-1.5 border-t border-white/15 pt-2.5 text-[10.5px] leading-4 text-white/65">
+          <TrendingDown className="mt-px size-3 shrink-0" />
+          Estimasi dari {total.toFixed(1)} m³ biogas · 0.45 kg LPG per m³. Bukan
+          tagihan aktual.
+        </p>
+      </div>
+    </Panel>
   );
 }
 
@@ -155,99 +186,118 @@ export default function RiwayatPage() {
 
   const ds = datasets[period];
   const peak = useMemo(
-    () =>
-      ds.data.reduce(
-        (acc, d) => (d.value > acc.value ? d : acc),
-        ds.data[0],
-      ),
+    () => ds.data.reduce((acc, d) => (d.value > acc.value ? d : acc), ds.data[0]),
     [ds],
   );
 
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:gap-6">
+    <div className="flex flex-col gap-4 lg:gap-5">
       <ScreenTitle
-        className="lg:col-span-12"
-        title="Estimasi Penghematan Energi"
-        subtitle="Pantau produksi biogas harian & konversi nilai rupiah"
+        title="Riwayat Produksi"
+        subtitle="Volume biogas, catatan pengisian, dan estimasi penghematan"
+        actions={
+          <Button
+            size="sm"
+            icon={ClipboardPlus}
+            onClick={() => setOpen(true)}
+          >
+            Catat
+          </Button>
+        }
       />
 
-      <div className="lg:col-span-12 lg:max-w-md">
-        <Segmented value={period} onChange={setPeriod} />
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:gap-5">
+        <Panel className="flex flex-col lg:col-span-8">
+          <PanelHead
+            label="Volume Biogas"
+            title={`${ds.total.toFixed(1)} m³`}
+            right={<PeriodSwitch value={period} onChange={setPeriod} />}
+          />
+
+          <div className="flex flex-1 flex-col gap-4 p-4">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <p className="text-[12px] text-muted">{ds.suffix}</p>
+              <StatusPill tone="good">Stabil</StatusPill>
+            </div>
+
+            <ProductionChart
+              key={period}
+              data={ds.data}
+              target={ds.target}
+            />
+
+            <div className="flex items-center gap-2 border-t border-line/30 pt-2.5">
+              <TrendingUp className="size-3.5 shrink-0 text-brand" strokeWidth={1.75} />
+              <p className="flex-1 text-[12px] text-ink-2">
+                Puncak <span className="font-mono text-ink">{peak.label}</span> ·{" "}
+                <span className="font-mono text-ink">{peak.value} m³</span>
+              </p>
+            </div>
+          </div>
+        </Panel>
+
+        <SavingsPanel className="lg:col-span-4" total={ds.total} />
       </div>
 
-      <Card className="flex flex-col gap-4 p-4 lg:col-span-7">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <SectionLabel>Volume Biogas Dihasilkan</SectionLabel>
-            <p className="mt-1 flex items-baseline gap-1.5">
-              <span className="text-lg font-semibold text-ink">
-                {ds.total}
-              </span>
-              <span className="text-sm text-ink-2">{ds.suffix}</span>
-            </p>
-          </div>
-          <StatusPill tone="good">Stabil</StatusPill>
-        </div>
-
-        <ProductionChart
-          key={period}
-          data={ds.data}
-          target={ds.target}
-          unit={ds.unit}
+      <Panel className="overflow-hidden">
+        <PanelHead
+          label="Catatan Harian"
+          title="Input Kotoran"
+          right={
+            <span className="font-mono text-[10.5px] text-muted">
+              {logs.length} entri · lokal
+            </span>
+          }
         />
 
-        <div className="flex items-center gap-3 rounded-lg bg-info-50 p-3">
-          <TrendingUp className="size-4 shrink-0 text-brand" />
-          <p className="flex-1 text-[13px] font-semibold text-ink">
-            Puncak produksi: {peak.label} ({peak.value} m³)
-          </p>
-          <span className="text-[13px] font-medium whitespace-nowrap text-muted">
-            Target +40%
-          </span>
-        </div>
-      </Card>
-
-      <div className="flex flex-col gap-4 lg:col-span-5 lg:gap-6">
-        <SavingsCard />
-        <QuickAction onLog={() => setOpen(true)} />
-      </div>
-
-      <section className="flex flex-col gap-3 lg:col-span-12">
-        <div className="flex items-center justify-between gap-3 px-1">
-          <h3 className="text-lg font-semibold text-ink">Catatan Harian</h3>
-          <span className="text-[13px] font-semibold text-muted">
-            Semua data tersimpan
-          </span>
-        </div>
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-          {logs.map((log) => (
-            <Card
+        <ul>
+          {logs.map((log, i) => (
+            <li
               key={log.id}
-              className="animate-fade-up flex items-center gap-3 p-4"
+              className={cn(
+                "flex items-start justify-between gap-4 px-4 py-3",
+                i > 0 && "border-t border-line/30",
+              )}
             >
-              <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-info-100 text-ink">
-                <ClipboardList className="size-4" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="text-[15px] font-semibold text-ink">
-                  {log.date}
-                </p>
-                <p className="truncate text-sm text-ink-2">{log.input}</p>
-              </div>
-              <div className="flex shrink-0 flex-col items-end gap-2">
-                <span className="text-base font-bold text-ink">
-                  {log.gas}
+              <div className="flex min-w-0 items-start gap-3">
+                <span className="mt-1.5 font-mono text-[10.5px] text-muted tnum">
+                  {String(logs.length - i).padStart(2, "0")}
                 </span>
+                <div className="min-w-0">
+                  <p className="text-[13px] leading-5 font-medium text-ink">
+                    {log.date}
+                  </p>
+                  <p className="truncate text-[11.5px] leading-4 text-muted">
+                    {log.input}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex shrink-0 flex-col items-end gap-1">
+                <Readout
+                  value={parseVolume(log.gas)?.toFixed(1) ?? "—"}
+                  unit="m³"
+                  size="sm"
+                />
                 <StatusPill
                   tone={log.status.tone === "neutral" ? "neutral" : "good"}
                 >
                   {log.status.text}
                 </StatusPill>
               </div>
-            </Card>
+            </li>
           ))}
-        </div>
-      </section>
+          {logs.length === 0 ? (
+            <li className="px-4 py-8 text-center text-[12px] text-muted">
+              Belum ada catatan.
+            </li>
+          ) : null}
+        </ul>
+      </Panel>
+
+      <p className="px-1 font-mono text-[10.5px] leading-4 text-muted">
+        Grafik memakai data contoh — belum tersambung ke histori backend.
+      </p>
 
       {open ? (
         <LogInputModal

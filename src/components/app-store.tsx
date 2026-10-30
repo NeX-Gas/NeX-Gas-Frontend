@@ -451,7 +451,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         {toasts.map((t) => (
           <div
             key={t.id}
-            className="animate-toast-in pointer-events-auto flex max-w-sm items-center gap-2.5 rounded-xl bg-ink px-4 py-3 text-sm font-medium text-white shadow-xl"
+            className="animate-toast-in pointer-events-auto flex max-w-sm items-center gap-2.5 rounded-[10px] bg-ink px-4 py-2.5 text-[12.5px] font-medium text-white shadow-xl"
           >
             <CheckCircle2 className="size-4 shrink-0 text-brand-300" />
             {t.message}
