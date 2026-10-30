@@ -1,9 +1,8 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowLeft, Bell, ChevronLeft, ChevronRight, User } from "lucide-react";
+import { ArrowLeft, Bell, User } from "lucide-react";
 import { Logo, LogoMark } from "@/components/logo";
 import { useAppStore } from "@/components/app-store";
 import { navItems, pageTitles } from "@/lib/nav";
@@ -16,31 +15,16 @@ function useActive() {
   return { pathname, isActive };
 }
 
-function Sidebar({
-  collapsed,
-  onToggle,
-}: {
-  collapsed: boolean;
-  onToggle: () => void;
-}) {
+function Sidebar() {
   const { isActive } = useActive();
   const { criticalCount } = useAppStore();
 
   return (
-    <aside
-      className={cn(
-        "fixed inset-y-0 left-0 z-40 hidden flex-col border-r border-info-100 bg-surface lg:flex",
-        collapsed ? "lg:w-16" : "w-64",
-      )}
-    >
-      <div className={cn("px-6 py-6", collapsed && "lg:px-3")}>
-        {collapsed ? (
-          <LogoMark className="size-9" />
-        ) : (
-          <Logo subtitle="Monitoring Biogas" />
-        )}
+    <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r border-info-100 bg-surface lg:flex">
+      <div className="px-6 py-6">
+        <Logo subtitle="Monitoring Biogas" />
       </div>
-      <nav className={cn("flex flex-1 flex-col gap-1 px-3", collapsed && "px-2")}>
+      <nav className="flex flex-1 flex-col gap-1 px-3">
         {navItems.map((item) => {
           const active = isActive(item.href);
           const Icon = item.icon;
@@ -53,12 +37,11 @@ function Sidebar({
                 active
                   ? "bg-info-100 text-brand"
                   : "text-ink-2 hover:bg-info-50 hover:text-ink",
-                collapsed && "justify-center px-2",
               )}
             >
-              <Icon className="size-5 shrink-0" strokeWidth={2} />
-              {!collapsed && <span className="flex-1">{item.label}</span>}
-              {!collapsed && item.href === "/notifikasi" && criticalCount > 0 ? (
+              <Icon className="size-5" strokeWidth={2} />
+              <span className="flex-1">{item.label}</span>
+              {item.href === "/notifikasi" && criticalCount > 0 ? (
                 <span className="grid size-5 place-items-center rounded-full bg-danger text-[11px] font-bold text-white">
                   {criticalCount}
                 </span>
@@ -67,25 +50,15 @@ function Sidebar({
           );
         })}
       </nav>
-      {!collapsed ? (
-        <div className="m-3 rounded-xl bg-info-50 p-4">
-          <div className="flex items-center gap-2">
-            <span className="size-2 rounded-full bg-brand-400" />
-            <span className="text-[13px] font-semibold text-ink">Unit #01 Online</span>
-          </div>
-          <p className="mt-1 text-[12px] leading-4 text-ink-2">
-            Telemetri nirkabel aktif • sinyal penuh
-          </p>
+      <div className="m-3 rounded-xl bg-info-50 p-4">
+        <div className="flex items-center gap-2">
+          <span className="size-2 rounded-full bg-brand-400" />
+          <span className="text-[13px] font-semibold text-ink">Unit #01 Online</span>
         </div>
-      ) : null}
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-label={collapsed ? "Buka menu navigasi" : "Tutup menu navigasi"}
-        className="m-3 grid size-9 place-items-center rounded-xl text-ink-2 transition-colors hover:bg-info-50 hover:text-ink"
-      >
-        {collapsed ? <ChevronRight className="size-5" /> : <ChevronLeft className="size-5" />}
-      </button>
+        <p className="mt-1 text-[12px] leading-4 text-ink-2">
+          Telemetri nirkabel aktif • sinyal penuh
+        </p>
+      </div>
     </aside>
   );
 }
@@ -197,12 +170,10 @@ function BottomNav() {
 }
 
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const [collapsed, setCollapsed] = useState(false);
-
   return (
     <div className="min-h-dvh bg-canvas">
-      <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)} />
-      <div className={cn("lg:pl-64", collapsed && "lg:pl-16")}>
+      <Sidebar />
+      <div className="lg:pl-64">
         <MobileHeader />
         <DesktopTopBar />
         <main className="mx-auto w-full max-w-md px-4 pt-4 pb-28 lg:max-w-5xl lg:px-8 lg:pt-4 lg:pb-16">
