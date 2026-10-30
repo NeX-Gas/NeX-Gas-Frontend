@@ -8,6 +8,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import { CheckCircle2 } from "lucide-react";
 import {
@@ -19,6 +20,18 @@ import {
 import { usePersistentState } from "@/lib/storage";
 import { THRESHOLDS } from "@/lib/system";
 import { useDevice } from "@/lib/use-device";
+import {
+  API_URL,
+  DEVICE_ID as BACKEND_DEVICE_ID,
+  getServerSession,
+  getSession,
+  isApiConfigured,
+  login as loginRequest,
+  logout as logoutRequest,
+  subscribeAuth,
+  type AuthSession,
+} from "@/lib/api";
+import { DEVICE_WS_URL } from "@/lib/device";
 import type {
   AppNotification,
   DeviceCommand,
@@ -63,6 +76,18 @@ type AppStore = {
   /** true kalau perintah bisa benar-benar sampai ke alat */
   canCommand: boolean;
   sendCommand: (command: DeviceCommand) => boolean;
+  /** Sesi login backend (JWT). `null` = belum login. */
+  auth: AuthSession | null;
+  /** true kalau `NEXT_PUBLIC_API_URL` diset. */
+  apiConfigured: boolean;
+  apiUrl: string;
+  wsUrl: string;
+  backendDeviceId: string;
+  /** Pesan error terakhir dari WebSocket/REST, ditampilkan apa adanya. */
+  lastError: string | null;
+  login: (username: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
+  refreshFromBackend: () => void;
   addLog: (inputKg: number, gas: string) => void;
   markAllRead: () => void;
   markRead: (id: string) => void;
@@ -162,8 +187,43 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
   );
 
   // Sumber data tunggal: backend (WebSocket) atau simulator kalau belum diset.
-  const { state: system, link, sendCommand, patch } = useDevice(onDeviceEvent);
+  const onBackendNotification = useCallback(
+    (notification: AppNotification) => {
+      setNotifications((prev) => {
+        if (prev.some((item) => item.id === notification.id)) return prev;
+        return [notification, ...prev].slice(0, MAX_NOTIFICATIONS);
+      });
+      notify(notification.title);
+    },
+    [notify, setNotifications],
+  );
+
+  const {
+    state: system,
+    link,
+    lastError,
+    sendCommand,
+    patch,
+    refresh,
+  } = useDevice(onDeviceEvent, onBackendNotification);
   const systemRef = useRef(system);
+
+  // ---- sesi backend ----
+  const auth = useSyncExternalStore(subscribeAuth, getSession, getServerSession);
+
+  const login = useCallback(
+    async (username: string, password: string) => {
+      const session = await loginRequest(username, password);
+      notify(`Login backend sebagai ${session.user.username} (${session.user.role})`);
+      refresh();
+    },
+    [notify, refresh],
+  );
+
+  const logout = useCallback(async () => {
+    await logoutRequest();
+    notify("Sesi backend diakhiri");
+  }, [notify]);
 
   useEffect(() => {
     systemRef.current = system;
@@ -402,8 +462,22 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       deviceId: system.deviceId,
       rssi: system.telemetry.rssi,
       lastSeen: system.lastSeen,
-      canCommand: link === "live" && system.deviceOnline,
+      canCommand:
+        link === "live" &&
+        system.deviceOnline &&
+        isApiConfigured &&
+        auth !== null &&
+        auth.user.role !== "viewer",
       sendCommand,
+      auth,
+      apiConfigured: isApiConfigured,
+      apiUrl: API_URL,
+      wsUrl: DEVICE_WS_URL,
+      backendDeviceId: BACKEND_DEVICE_ID,
+      lastError,
+      login,
+      logout,
+      refreshFromBackend: refresh,
       addLog,
       markAllRead,
       markRead,
@@ -427,6 +501,11 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     language,
     system,
     link,
+    lastError,
+    auth,
+    login,
+    logout,
+    refresh,
     sendCommand,
     addLog,
     markAllRead,

@@ -2,29 +2,67 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Integrasi alat (MQTT → backend → dashboard)
 
-Data alat masuk lewat satu pintu: `src/lib/use-device.ts`.
+Data alat masuk lewat satu pintu: `src/lib/use-device.ts`. Kontraknya
+mengikuti **NeX-Gas-Backend** (branch `feat/backend-core`), bukan format
+bebas.
 
-- `NEXT_PUBLIC_DEVICE_WS_URL` kosong → dashboard jalan dengan **simulator lokal**
+- `NEXT_PUBLIC_WS_URL` kosong → dashboard jalan dengan **simulator lokal**
   (`computeNext()` di `src/lib/system.ts`). Tidak ada data palsu yang
   dikirim ke alat.
-- Diisi (mis. `wss://api.nex-gas.id/ws`) → dashboard membaca data asli dari
-  backend. Backend hanya perlu meneruskan pesan MQTT sebagai JSON:
+- Diisi (mis. `wss://api.nex-gas.id/ws`) → dashboard membaca amplop yang
+  dikirim gateway WebSocket backend:
 
 ```json
-{ "type": "telemetry", "payload": { "...": "isi nexgas/<id>/telemetry" } }
-{ "type": "state",     "payload": { "...": "isi nexgas/<id>/state" } }
-{ "type": "event",     "payload": { "...": "isi nexgas/<id>/event" } }
-{ "type": "status",    "payload": "online" }
+{ "type": "telemetry", "deviceId": "nexgas-001", "data": { "...": "normalized" }, "frontend": { "...": "siap pakai" } }
+{ "type": "state",     "deviceId": "nexgas-001", "data": { "...": "valve/filter/kalibrasi" }, "frontend": { "telemetry": { "...": "" } } }
+{ "type": "status",    "deviceId": "nexgas-001", "data": { "status": "online" } }
+{ "type": "event",     "deviceId": "nexgas-001", "data": { "...": "event" }, "notification": { "...": "AppNotification" } }
 ```
 
-Perintah dari dashboard (`mode`, `valve`, `tare`, `cal_pressure_point`,
-`cal_mq`, `cal_ph`) dikirim sebagai
-`{"type":"command","payload":{...}}` pada WebSocket yang sama, atau
-`POST {NEXT_PUBLIC_API_URL}/commands` sebagai fallback.
+`src/lib/device.ts` (`parseBackendMessage()`) memetakan amplop itu ke state
+dashboard: nama panjang backend (`temperatureC`, `h2sAfter`, …) → payload
+firmware, dan `null` backend → sentinel `-1` supaya UI menampilkan
+"—" / "sensor belum terpasang" alih-alih angka palsu.
 
-Salin `.env.example` menjadi `.env.local` lalu isi URL-nya. Kontrak payload
-mengikuti `buildTelemetryJson()` / `buildStateJson()` di repo
-`NeX-Gas-Firmware`, dan tipe TypeScript-nya ada di `src/lib/types.ts`.
+### REST & perintah
+
+Semua endpoint backend dilindungi **Bearer JWT**:
+
+| Aksi | Endpoint | Role |
+| --- | --- | --- |
+| Snapshot terakhir | `GET /api/telemetry/latest`, `GET /api/state`, `GET /api/status` | viewer/operator/admin |
+| Riwayat | `GET /api/history/telemetry`, `GET /api/history/events` | viewer/operator/admin |
+| Perintah | `POST /api/command` body `{ deviceId, command }` | operator/admin |
+| Login | `POST /api/auth/login`, `POST /api/auth/refresh`, `POST /api/auth/logout` | publik |
+
+- Login tersedia di halaman **Pengaturan → Koneksi Backend**. Token disimpan
+  di `localStorage` (`nexgas-auth`) dan di-refresh otomatis sebelum
+  kedaluwarsa (akses 15 menit).
+- Perintah **tidak** dikirim lewat WebSocket. Backend membalas jujur:
+  `status: "published"`, `verificationStatus: "pending_execution"` — bukan
+  ACK firmware.
+- Kalau backend dijalankan dengan `PUBLIC_MQTT_TEST_MODE=true`, semua
+  perintah ditolak `403` dan pesannya ditampilkan apa adanya di UI.
+- CORS backend (`CORS_ALLOWED_ORIGINS`) harus memuat origin frontend,
+  mis. `https://nex-gas.vercel.app`.
+
+Salin `.env.example` menjadi `.env.local` lalu isi URL-nya:
+
+```bash
+NEXT_PUBLIC_WS_URL=ws://localhost:5001/ws
+NEXT_PUBLIC_API_URL=http://localhost:5001
+NEXT_PUBLIC_DEVICE_ID=nexgas-001
+```
+
+Kontrak payload alat mengikuti `buildTelemetryJson()` / `buildStateJson()`
+di repo `NeX-Gas-Firmware`, dan tipe TypeScript-nya ada di `src/lib/types.ts`.
+
+### Sidebar
+
+Menu kiri bisa diringkas jadi icon-only lewat tombol **Ringkas menu**
+(`PanelLeftClose` / `PanelLeftOpen`). Pilihan disimpan di
+`localStorage` (`nexgas:sidebar-collapsed`) sehingga tetap sama setelah
+refresh.
 
 ### Yang jalan tanpa backend
 
