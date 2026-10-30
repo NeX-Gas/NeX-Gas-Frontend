@@ -199,10 +199,34 @@ function PastLog({ className }: { className?: string }) {
 }
 
 export default function PurifikasiPage() {
-  const { filters, replaceFilter } = useAppStore();
-  const mostSaturated = filters.reduce(
+  const { filters, replaceFilter, filterHealth, filterWarning, telemetry } =
+    useAppStore();
+
+  // Karbon aktif memakai health dari firmware; silika belum punya sensor.
+  const units = filters.map((unit) =>
+    unit.id === "carbon-active"
+      ? {
+          ...unit,
+          saturation: Math.max(0, Math.min(100, Math.round(100 - filterHealth))),
+          status: filterWarning
+            ? { text: "Jenuh", tone: "warn" as Tone }
+            : { text: "Aman", tone: "good" as Tone },
+          noteTitle: filterWarning
+            ? "H₂S menembus filter"
+            : "Media masih aktif",
+          noteBody: filterWarning
+            ? `H₂S sesudah filter ${telemetry.h2sAfter.toFixed(
+                1,
+              )} ppm — ganti karbon aktif.`
+            : "H₂S sesudah filter masih di bawah ambang aman.",
+          noteTone: filterWarning ? ("warn" as Tone) : ("good" as Tone),
+        }
+      : unit,
+  );
+
+  const mostSaturated = units.reduce(
     (acc, f) => (f.saturation > acc.saturation ? f : acc),
-    filters[0],
+    units[0],
   );
 
   return (
@@ -211,7 +235,7 @@ export default function PurifikasiPage() {
       <InfoBanner className="lg:col-span-7" />
       <IllustrationCard className="lg:col-span-5" />
 
-      {filters.map((unit) => (
+      {units.map((unit) => (
         <FilterCard key={unit.id} unit={unit} className="lg:col-span-6" />
       ))}
 

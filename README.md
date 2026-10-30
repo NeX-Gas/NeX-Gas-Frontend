@@ -26,6 +26,21 @@ Salin `.env.example` menjadi `.env.local` lalu isi URL-nya. Kontrak payload
 mengikuti `buildTelemetryJson()` / `buildStateJson()` di repo
 `NeX-Gas-Firmware`, dan tipe TypeScript-nya ada di `src/lib/types.ts`.
 
+### Yang jalan tanpa backend
+
+- Catatan harian (input kotoran), bahasa, riwayat penggantian filter, dan
+  notifikasi disimpan di `localStorage` (`src/lib/storage.ts`) — bertahan
+  setelah refresh, ikut sinkron antar tab.
+- Kalibrasi (`tare`, 2 titik tekanan, 2 titik pH, R0 MQ) ada di halaman
+  **Pengaturan**. Tombolnya otomatis nonaktif selama dashboard masih mode
+  demo / backend belum tersambung.
+- Mode otomatis valve terkunci sampai `pressureCalibrated` bernilai true,
+  sama seperti perilaku firmware.
+- Sensor yang belum terpasang (firmware mengirim `-1`) ditampilkan sebagai
+  `—` / "sensor belum terpasang", bukan angka palsu.
+- Grafik produksi mingguan di halaman Riwayat masih contoh statis (belum ada
+  data historis dari backend).
+
 ## Getting Started
 
 First, run the development server:

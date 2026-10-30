@@ -24,7 +24,8 @@ export function LogInputModal({
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const gas = (kg * 0.072).toFixed(1);
+  const valid = Number.isFinite(kg) && kg > 0 && kg <= 500;
+  const gas = valid ? (kg * 0.072).toFixed(1) : "0.0";
 
   return (
     <div
@@ -64,7 +65,9 @@ export function LogInputModal({
             type="number"
             inputMode="numeric"
             min={1}
-            value={kg}
+            max={500}
+            step={1}
+            value={Number.isFinite(kg) ? kg : ""}
             onChange={(e) => setKg(Number(e.target.value))}
             className="h-12 w-28 rounded-xl border border-info-300 bg-info-50 px-3 text-lg font-semibold text-ink focus:border-brand focus:outline-none"
           />
@@ -93,7 +96,9 @@ export function LogInputModal({
           </Button>
           <Button
             fullWidth
+            disabled={!valid}
             onClick={() => {
+              if (!valid) return;
               onSave(kg);
               onClose();
             }}

@@ -30,24 +30,53 @@ import {
 } from "@/components/ui";
 import { useAppStore } from "@/components/app-store";
 import { digester } from "@/lib/mock";
-import { h2sTone } from "@/lib/system";
+import { fmtValue } from "@/lib/format";
+import { BURN_RATE_LPH, h2sTone, THRESHOLDS } from "@/lib/system";
 import { cn } from "@/lib/cn";
 
 function TopStatus({ className }: { className?: string }) {
+  const { link, deviceOnline, lastSeen } = useAppStore();
+  const isLive = link === "live" && deviceOnline;
+  const badge =
+    link === "demo"
+      ? { text: "Mode demo", tone: "bg-info-200 text-ink" }
+      : isLive
+        ? { text: "Online", tone: "bg-info-200 text-ink" }
+        : link === "connecting"
+          ? { text: "Menghubungkan…", tone: "bg-info-200 text-ink" }
+          : { text: "Offline", tone: "bg-danger-200 text-danger-800" };
+
   return (
     <Card className={cn("flex items-center gap-4 p-4", className)}>
       <IconTile icon={Flame} size="md" />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
-          <span className="size-2.5 rounded-full bg-brand-400" />
+          <span
+            className={cn(
+              "size-2.5 rounded-full",
+              isLive ? "bg-brand-400" : "bg-muted",
+            )}
+          />
           <h2 className="truncate text-lg font-semibold text-ink">
             {digester.name}
           </h2>
         </div>
-        <p className="truncate text-sm text-ink-2">{digester.unit}</p>
+        <p className="truncate text-sm text-ink-2">
+          {lastSeen
+            ? `Data terakhir ${new Date(lastSeen).toLocaleTimeString("id-ID", {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}`
+            : "Menunggu data alat"}
+        </p>
       </div>
-      <span className="shrink-0 rounded-full bg-info-200 px-3 py-1 text-[13px] font-semibold text-ink">
-        Online
+      <span
+        className={cn(
+          "shrink-0 rounded-full px-3 py-1 text-[13px] font-semibold",
+          badge.tone,
+        )}
+      >
+        {badge.text}
       </span>
     </Card>
   );
@@ -55,7 +84,11 @@ function TopStatus({ className }: { className?: string }) {
 
 function Telemetry({ className }: { className?: string }) {
   const { telemetry } = useAppStore();
-  const percent = Math.round((digester.tankLiters / digester.tankCapacity) * 100);
+  // Persentase dari tekanan penampung terhadap ambang penuh (2.0 kPa).
+  const percent = Math.round(
+    Math.min(100, (Math.max(0, telemetry.pressureCollector) / THRESHOLDS.collectorFullAt) * 100),
+  );
+  const ready = telemetry.pressureDigester >= THRESHOLDS.valveOpenAt;
   const tone = h2sTone(telemetry.h2sAfter);
   const h2sLabel =
     tone === "good"
@@ -74,17 +107,20 @@ function Telemetry({ className }: { className?: string }) {
             </span>
             <span className="mt-1 text-lg font-bold text-ink-2">%</span>
           </div>
-          <span className="text-[15px] font-bold text-brand">Siap Pakai</span>
-          <span className="mt-1 text-xs text-ink-2">Tekanan Gas Cukup</span>
+          <span className="text-[15px] font-bold text-brand">
+            {ready ? "Siap Pakai" : "Menunggu"}
+          </span>
+          <span className="mt-1 text-xs text-ink-2">
+            {ready ? "Tekanan Gas Cukup" : "Tekanan Belum Cukup"}
+          </span>
         </div>
       </RadialGauge>
 
       <div className="w-full rounded-lg bg-info-50 p-3">
         <div className="flex items-center justify-between gap-3">
-          <SectionLabel>Kapasitas Penampung</SectionLabel>
+          <SectionLabel>Gas Terkumpul (sejak alat hidup)</SectionLabel>
           <span className="text-[13px] font-semibold text-ink">
-            {digester.tankLiters.toLocaleString("id-ID")} /{" "}
-            {digester.tankCapacity.toLocaleString("id-ID")} L
+            {fmtValue(telemetry.gasSinceStartL, 1)} L
           </span>
         </div>
         <ProgressBar value={percent} className="mt-2 h-2.5" />
@@ -109,7 +145,7 @@ function Telemetry({ className }: { className?: string }) {
           )}
         </span>
         <span className="text-[15px] font-semibold text-ink">
-          {h2sLabel} ({telemetry.h2sAfter.toFixed(1)} ppm)
+          {h2sLabel} ({fmtValue(telemetry.h2sAfter, 1)} ppm)
         </span>
       </div>
     </Card>
@@ -156,44 +192,91 @@ function SensorCard({
 }
 
 function Sensors({ className }: { className?: string }) {
-  const { telemetry } = useAppStore();
+  const { telemetry, phCalibrated } = useAppStore();
   const tempOptimal =
-    telemetry.temperature >= 28 && telemetry.temperature <= 38;
-  const humidityOk = telemetry.humidity <= 90;
+    telemetry.temperature >= THRESHOLDS.tempMin &&
+    telemetry.temperature <= THRESHOLDS.tempMax;
+  const humidityOk = telemetry.humidity <= THRESHOLDS.humidityMax;
+  const gasLineOk = telemetry.gasLineHumidity <= THRESHOLDS.humidityMax;
+  const phValue = fmtValue(telemetry.ph, 1);
+  const ph = telemetry.ph;
+  const phStatus =
+    phValue === "—"
+      ? "Sensor belum ada"
+      : ph < 6.5
+        ? "Terlalu asam"
+        : ph > 7.5
+          ? "Terlalu basa"
+          : phCalibrated
+            ? "Stabil"
+            : "Belum dikalibrasi";
+  const phTone =
+    phValue === "—" || !phCalibrated
+      ? "warn"
+      : ph < 6.5 || ph > 7.5
+        ? "warn"
+        : "good";
+
   return (
     <div className={cn("grid grid-cols-2 gap-4 lg:gap-6", className)}>
       <SensorCard
         label="Suhu Digester"
         icon={<Thermometer className="size-4" />}
-        value={telemetry.temperature.toFixed(1)}
+        value={fmtValue(telemetry.temperature, 1)}
         unit="°C"
         status={tempOptimal ? "Optimal" : "Di luar rentang"}
         hint="Mesofilik ideal 28° - 38°C"
         tone={tempOptimal ? "good" : "warn"}
       />
       <SensorCard
-        label="Kelembapan Gas"
+        label="Kelembapan Digester"
         icon={<Droplets className="size-4" />}
-        value={telemetry.humidity.toFixed(0)}
+        value={fmtValue(telemetry.humidity, 0)}
         unit="%"
         status={humidityOk ? "Kering" : "Lembap"}
-        hint="DHT22 jalur setelah silika"
+        hint="DHT22 #1 headspace"
         tone={humidityOk ? "good" : "warn"}
+      />
+      <SensorCard
+        label="Suhu Jalur Gas"
+        icon={<Thermometer className="size-4" />}
+        value={fmtValue(telemetry.gasLineTemperature, 1)}
+        unit="°C"
+        status={gasLineOk ? "Normal" : "Periksa silika"}
+        hint="DHT22 #2 setelah silika gel"
+        tone="good"
+      />
+      <SensorCard
+        label="Kelembapan Jalur Gas"
+        icon={<Droplets className="size-4" />}
+        value={fmtValue(telemetry.gasLineHumidity, 0)}
+        unit="%"
+        status={gasLineOk ? "Kering" : "Lembap"}
+        hint={`Ambang < ${THRESHOLDS.humidityMax}%`}
+        tone={gasLineOk ? "good" : "warn"}
       />
       <SensorCard
         label="Tingkat pH"
         icon={<Droplet className="size-4" />}
-        value={digester.ph.toFixed(1)}
+        value={phValue}
         unit="pH"
-        status={digester.phStatus}
-        hint={digester.phRange}
+        status={phStatus}
+        hint={
+          phCalibrated
+            ? "Rentang ideal 6.5 - 7.5"
+            : "Kalibrasi 2 titik di Pengaturan"
+        }
+        tone={phTone}
       />
     </div>
   );
 }
 
 function BurnCard() {
-  const { notify } = useAppStore();
+  const { notify, telemetry } = useAppStore();
+  const litres = Math.max(0, telemetry.gasSinceStartL);
+  const hours = litres / BURN_RATE_LPH;
+  const estimate = `${hours.toFixed(1)} jam api nyala`;
   return (
     <Card className="flex items-center gap-3 bg-info-200 p-4">
       <span className="grid size-12 shrink-0 place-items-center rounded-lg bg-surface text-brand">
@@ -201,10 +284,11 @@ function BurnCard() {
       </span>
       <div className="min-w-0 flex-1">
         <SectionLabel>Estimasi Penggunaan</SectionLabel>
-        <p className="mt-0.5 text-lg font-semibold text-ink">
-          {digester.burnTime}
+        <p className="mt-0.5 text-lg font-semibold text-ink">{estimate}</p>
+        <p className="text-xs text-ink-2">
+          Dari {litres.toFixed(1)} L gas sejak alat hidup · asumsi{" "}
+          {BURN_RATE_LPH} L/jam
         </p>
-        <p className="text-xs text-ink-2">{digester.burnHint}</p>
       </div>
       <button
         type="button"

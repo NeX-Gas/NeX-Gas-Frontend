@@ -17,6 +17,12 @@ export const THRESHOLDS = {
 /** Nilai pengganti saat firmware mengirim -1 (sensor tidak tersedia). */
 export const SENSOR_UNAVAILABLE = -1;
 
+/**
+ * Asumsi konsumsi kompor biogas untuk kartu estimasi (L/jam).
+ * Ganti setelah ada pengukuran lapangan; angka ini bukan dari firmware.
+ */
+export const BURN_RATE_LPH = 300;
+
 export const initialSystem: SystemState = {
   telemetry: {
     ts: 0,

@@ -23,6 +23,7 @@ import {
   StatusPill,
 } from "@/components/ui";
 import { useAppStore } from "@/components/app-store";
+import { fmtValue, hasValue } from "@/lib/format";
 import { h2sTone, THRESHOLDS } from "@/lib/system";
 import type { Tone, ValveMode } from "@/lib/types";
 import { cn } from "@/lib/cn";
@@ -77,10 +78,11 @@ export function GasMonitor({ className }: { className?: string }) {
   const { telemetry, filterWarning, leakWarning, filterHealth } = useAppStore();
   const { h2sBefore, h2sAfter, ch4, leak } = telemetry;
 
-  const effectiveness = Math.max(
-    0,
-    Math.min(100, Math.round((1 - h2sAfter / h2sBefore) * 100)),
-  );
+  const effectiveness =
+    hasValue(h2sBefore) && hasValue(h2sAfter) && h2sBefore > 0
+      ? Math.max(0, Math.min(100, Math.round((1 - h2sAfter / h2sBefore) * 100)))
+      : 0;
+  const beforeAvailable = hasValue(h2sBefore);
   const afterTone = h2sTone(h2sAfter);
   const overall: Tone = leakWarning
     ? "danger"
@@ -108,16 +110,20 @@ export function GasMonitor({ className }: { className?: string }) {
       <div className="grid grid-cols-2 gap-3">
         <StatTile
           label="H₂S Sebelum Filter"
-          value={h2sBefore.toFixed(1)}
+          value={fmtValue(h2sBefore, 1)}
           unit="ppm"
           icon={Wind}
           tone="neutral"
-          status="Dari digester"
-          hint="Sensor MQ-136 inlet"
+          status={beforeAvailable ? "Dari digester" : "Sensor belum terpasang"}
+          hint={
+            beforeAvailable
+              ? "Sensor MQ-136 inlet"
+              : "MQ-136 #2 belum dipasang (firmware kirim -1)"
+          }
         />
         <StatTile
           label="H₂S Sesudah Filter"
-          value={h2sAfter.toFixed(1)}
+          value={fmtValue(h2sAfter, 1)}
           unit="ppm"
           icon={Filter}
           tone={afterTone}
@@ -132,7 +138,7 @@ export function GasMonitor({ className }: { className?: string }) {
         />
         <StatTile
           label="Metana (CH₄)"
-          value={ch4.toFixed(0)}
+          value={fmtValue(ch4, 0)}
           unit="%"
           icon={Flame}
           tone="good"
@@ -141,7 +147,7 @@ export function GasMonitor({ className }: { className?: string }) {
         />
         <StatTile
           label="Kebocoran Metana"
-          value={leak.toFixed(0)}
+          value={fmtValue(leak, 0)}
           unit="ppm"
           icon={Siren}
           tone={leakWarning ? "danger" : "good"}
@@ -153,7 +159,9 @@ export function GasMonitor({ className }: { className?: string }) {
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between text-[13px] font-semibold text-ink-2">
           <span>Efektivitas Purifikasi H₂S</span>
-          <span className="text-ink">{effectiveness}%</span>
+          <span className="text-ink">
+            {beforeAvailable ? `${effectiveness}%` : "—"}
+          </span>
         </div>
         <ProgressBar
           value={effectiveness}
@@ -183,6 +191,8 @@ export function ValveControl({ className }: { className?: string }) {
     closeValve,
     telemetry,
     leakWarning,
+    pressureCalibrated,
+    canCommand,
   } = useAppStore();
   const delta = telemetry.pressureDigester - telemetry.pressureCollector;
   const modes: { key: ValveMode; label: string; icon: LucideIcon }[] = [
@@ -207,11 +217,20 @@ export function ValveControl({ className }: { className?: string }) {
               key={m.key}
               type="button"
               onClick={() => setValveMode(m.key)}
+              disabled={m.key === "auto" && !pressureCalibrated}
+              title={
+                m.key === "auto" && !pressureCalibrated
+                  ? "Kalibrasi tekanan 2 titik dulu"
+                  : undefined
+              }
               className={cn(
                 "inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-lg text-[13px] font-semibold transition-colors",
                 active
                   ? "bg-surface text-brand card-shadow"
                   : "text-ink-2 hover:bg-info-100",
+                m.key === "auto" &&
+                  !pressureCalibrated &&
+                  "cursor-not-allowed opacity-40",
               )}
             >
               <m.icon className="size-4" />
@@ -271,24 +290,32 @@ export function ValveControl({ className }: { className?: string }) {
         <div className="flex items-center justify-between">
           <span>Aliran gas</span>
           <span className="font-semibold text-ink">
-            {telemetry.flow.toFixed(1)} L/h
+            {fmtValue(telemetry.flow, 1)} L/h
           </span>
         </div>
         <div className="flex items-center justify-between">
           <span>Δ tekanan (digester − penampung)</span>
           <span className="font-semibold text-ink">
-            {delta >= 0 ? "+" : ""}
-            {delta.toFixed(2)} kPa
+            {hasValue(telemetry.pressureDigester) &&
+            hasValue(telemetry.pressureCollector)
+              ? `${delta >= 0 ? "+" : ""}${delta.toFixed(2)} kPa`
+              : "—"}
           </span>
         </div>
         {leakWarning ? (
           <p className="mt-1 font-semibold text-danger">
             Kebocoran metana — valve dipaksa tertutup (fail-safe).
           </p>
+        ) : !pressureCalibrated ? (
+          <p className="mt-1 font-semibold text-danger">
+            Mode otomatis terkunci: sensor tekanan belum dikalibrasi 2 titik
+            (Pengaturan → Kalibrasi).
+          </p>
         ) : (
           <p className="mt-1 text-muted">
             Buka ≥ {THRESHOLDS.valveOpenAt.toFixed(1)} kPa · Tutup ≤{" "}
             {THRESHOLDS.valveCloseAt.toFixed(1)} kPa · Fail-safe N/C
+            {canCommand ? "" : " · perintah belum tersambung ke alat"}
           </p>
         )}
       </div>
@@ -297,11 +324,17 @@ export function ValveControl({ className }: { className?: string }) {
 }
 
 export function PressureMonitor({ className }: { className?: string }) {
-  const { telemetry, valveOpen, leakWarning, filterWarning } = useAppStore();
+  const {
+    telemetry,
+    valveOpen,
+    leakWarning,
+    filterWarning,
+    pressureCalibrated,
+  } = useAppStore();
   const { pressureDigester, pressureCollector } = telemetry;
 
-  const digesterPct = Math.min(100, (pressureDigester / 2) * 100);
-  const collectorPct = Math.min(100, (pressureCollector / 2) * 100);
+  const digesterPct = Math.max(0, Math.min(100, (pressureDigester / 2) * 100));
+  const collectorPct = Math.max(0, Math.min(100, (pressureCollector / 2) * 100));
   const collectorFull = pressureCollector >= THRESHOLDS.collectorFullAt;
 
   const status = leakWarning
@@ -323,7 +356,9 @@ export function PressureMonitor({ className }: { className?: string }) {
             Digester vs Penampung
           </h3>
         </div>
-        {filterWarning ? (
+        {!pressureCalibrated ? (
+          <StatusPill tone="warn">Belum terkalibrasi</StatusPill>
+        ) : filterWarning ? (
           <StatusPill tone="warn">Filter jenuh</StatusPill>
         ) : null}
       </div>
@@ -334,7 +369,9 @@ export function PressureMonitor({ className }: { className?: string }) {
             <Gauge className="size-4 text-brand" />
             Tekanan Digester
           </span>
-          <span className="text-ink">{pressureDigester.toFixed(2)} kPa</span>
+          <span className="text-ink">
+            {fmtValue(pressureDigester, 2)} kPa
+          </span>
         </div>
         <ProgressBar
           value={digesterPct}
@@ -357,7 +394,9 @@ export function PressureMonitor({ className }: { className?: string }) {
             <Activity className="size-4 text-brand" />
             Tekanan Penampung
           </span>
-          <span className="text-ink">{pressureCollector.toFixed(2)} kPa</span>
+          <span className="text-ink">
+            {fmtValue(pressureCollector, 2)} kPa
+          </span>
         </div>
         <ProgressBar
           value={collectorPct}
@@ -414,7 +453,7 @@ export function FilterMaintenanceCard({ className }: { className?: string }) {
         <div className="flex items-center justify-between">
           <span>H₂S sesudah filter</span>
           <span className="font-semibold text-ink">
-            {telemetry.h2sAfter.toFixed(1)} ppm
+            {fmtValue(telemetry.h2sAfter, 1)} ppm
           </span>
         </div>
         <div className="flex items-center justify-between">

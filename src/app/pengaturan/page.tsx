@@ -1,19 +1,11 @@
 "use client";
 
-import {
-  ChevronRight,
-  Languages,
-  Leaf,
-  Radio,
-  RefreshCw,
-  TrendingUp,
-  User,
-  Wifi,
-} from "lucide-react";
-import { Button } from "@/components/button";
+import { ChevronRight, Languages, Leaf, Radio, User } from "lucide-react";
 import { Card, IconTile, SectionLabel } from "@/components/ui";
 import { useAppStore } from "@/components/app-store";
+import { CalibrationPanel, DeviceStatusCard } from "@/components/device-panel";
 import { operationalSettings } from "@/lib/mock";
+import { THRESHOLDS } from "@/lib/system";
 import type { Language } from "@/lib/types";
 import { cn } from "@/lib/cn";
 
@@ -23,75 +15,29 @@ const languages: { key: Language; label: string }[] = [
   { key: "su", label: "Basa Sunda" },
 ];
 
-function UnitCard({ className }: { className?: string }) {
-  const { notify } = useAppStore();
-  return (
-    <Card className={cn("flex flex-col gap-4 p-4", className)}>
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <IconTile icon={Radio} tone="info" className="bg-info-200" />
-          <div>
-            <SectionLabel>Unit Terpasang</SectionLabel>
-            <p className="text-lg font-bold text-ink">NEX-GAS Unit #01</p>
-          </div>
-        </div>
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-info-50 px-3 py-1 text-[13px] font-semibold text-brand">
-          <span className="size-2.5 rounded-full bg-brand-400" />
-          Aktif
-        </span>
-      </div>
-
-      <div className="flex flex-col gap-2 rounded-lg bg-info-50 p-3">
-        <div className="flex items-center justify-between gap-3">
-          <span className="flex items-center gap-2 text-sm font-medium text-ink">
-            <Wifi className="size-4 text-brand" />
-            LoRa / Bluetooth Gateway
-          </span>
-          <span className="flex items-center gap-1.5 text-[13px] font-semibold text-brand">
-            <Wifi className="size-3.5" />
-            Sinyal Penuh
-          </span>
-        </div>
-        <div className="flex items-center justify-between gap-3 border-t border-info-300 pt-2">
-          <span className="text-[13px] font-semibold text-ink-2">
-            ID Digester: ID-BDG-2023-09
-          </span>
-          <span className="flex items-center gap-1 text-[13px] font-bold text-ink">
-            <TrendingUp className="size-3.5 text-brand-400" />
-            88%
-          </span>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-2">
-        <Button
-          variant="soft"
-          size="sm"
-          icon={RefreshCw}
-          onClick={() => notify("Sinkronisasi gateway berhasil")}
-        >
-          Sinkronisasi
-        </Button>
-        <Button
-          variant="secondary"
-          size="sm"
-          icon={Radio}
-          onClick={() => notify("Respon gateway normal (24 ms)")}
-        >
-          Cek Respon
-        </Button>
-      </div>
-    </Card>
-  );
-}
-
 function ParameterSection({ className }: { className?: string }) {
-  const { notify } = useAppStore();
+  const { notify, pressureCalibrated, phCalibrated, firmware, telemetry } =
+    useAppStore();
+  const items = [
+    ...operationalSettings.slice(0, 1),
+    {
+      id: "kalibrasi",
+      title: "Kalibrasi Sensor",
+      desc: `Tekanan ${pressureCalibrated ? "selesai" : "belum"} · pH ${
+        phCalibrated ? "selesai" : "belum"
+      } · firmware ${firmware} · RSSI ${telemetry.rssi || "—"} dBm`,
+    },
+    {
+      id: "ambang",
+      title: "Ambang Batas Notifikasi",
+      desc: `H₂S ${THRESHOLDS.h2sWarn}/${THRESHOLDS.h2sDanger} ppm · bocor ${THRESHOLDS.leakWarn}/${THRESHOLDS.leakDanger} ppm · valve ${THRESHOLDS.valveOpenAt}/${THRESHOLDS.valveCloseAt} kPa`,
+    },
+  ];
   return (
     <section className={cn("flex flex-col gap-3", className)}>
       <SectionLabel className="px-1">Parameter Operasional</SectionLabel>
       <div className="flex flex-col gap-3">
-        {operationalSettings.map((item) => (
+        {items.map((item) => (
           <button
             key={item.id}
             type="button"
@@ -181,10 +127,13 @@ export default function PengaturanPage() {
         </p>
       </header>
 
-      <UnitCard className="lg:col-span-12" />
+      <DeviceStatusCard className="lg:col-span-12" />
 
-      <ParameterSection className="lg:col-span-7" />
-      <Preferences className="lg:col-span-5" />
+      <CalibrationPanel className="lg:col-span-7" />
+      <div className="flex flex-col gap-4 lg:col-span-5 lg:gap-6">
+        <Preferences />
+        <ParameterSection />
+      </div>
 
       <footer className="mt-2 flex flex-col items-center gap-1 text-center lg:col-span-12">
         <p className="text-[13px] font-medium text-ink-2">
