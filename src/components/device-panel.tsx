@@ -1,56 +1,33 @@
 "use client";
 
 import { useState } from "react";
-import {
-  Activity,
-  Cpu,
-  FlaskConical,
-  Gauge,
-  Radio,
-  RotateCcw,
-  ShieldQuestion,
-  Wifi,
-} from "lucide-react";
+import { Activity, FlaskConical, Gauge, RotateCcw, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/button";
-import { Card, SectionLabel, StatusPill } from "@/components/ui";
+import {
+  MetricRow,
+  Panel,
+  PanelHead,
+  Readout,
+  SectionLabel,
+  StatusBadge,
+} from "@/components/ui";
 import { useAppStore } from "@/components/app-store";
 import { relativeTime } from "@/lib/format";
 import { cn } from "@/lib/cn";
 
 const linkLabel = {
-  live: "Live (alat)",
-  demo: "Mode demo",
-  connecting: "Menghubungkan…",
-  offline: "Backend offline",
+  live: "Live",
+  demo: "Demo",
+  connecting: "Menyambung",
+  offline: "Offline",
 } as const;
 
-function Row({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: React.ReactNode;
-  tone?: "good" | "warn" | "neutral";
-}) {
-  return (
-    <div className="flex items-center justify-between gap-3">
-      <span className="text-[12px] text-ink-2">{label}</span>
-      <span
-        className={cn(
-          "text-[12px] font-semibold",
-          tone === "warn"
-            ? "text-danger"
-            : tone === "good"
-              ? "text-brand"
-              : "text-ink",
-        )}
-      >
-        {value}
-      </span>
-    </div>
-  );
-}
+const linkTone = {
+  live: "good",
+  demo: "info",
+  connecting: "warn",
+  offline: "danger",
+} as const;
 
 export function DeviceStatusCard({ className }: { className?: string }) {
   const {
@@ -66,53 +43,64 @@ export function DeviceStatusCard({ className }: { className?: string }) {
     phCalibrated,
   } = useAppStore();
 
-  const linkTone =
-    link === "live" && deviceOnline
-      ? "good"
-      : link === "demo"
-        ? "neutral"
-        : "warn";
-
   return (
-    <Card className={cn("flex flex-col gap-4 p-4", className)}>
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <SectionLabel>Status Alat</SectionLabel>
-          <h3 className="mt-1 text-lg font-semibold text-ink">{deviceId}</h3>
-        </div>
-        <StatusPill tone={linkTone}>{linkLabel[link]}</StatusPill>
-      </div>
+    <Panel className={cn("flex flex-col", className)}>
+      <PanelHead
+        label="Status Alat"
+        title={deviceId}
+        right={
+          <StatusBadge tone={linkTone[link]}>
+            {linkLabel[link]}
+            {link === "live" && !deviceOnline ? " · offline" : ""}
+          </StatusBadge>
+        }
+      />
 
-      <div className="flex flex-col gap-1.5 rounded-lg bg-info-50 p-3">
-        <Row
-          label="Sinyal WiFi"
-          value={rssi === 0 ? "tidak tersedia" : `${rssi} dBm`}
-          tone={rssi === 0 ? "warn" : rssi > -70 ? "good" : "warn"}
-        />
-        <Row
-          label="Sensor siap"
-          value={sensorsReady ? "ya" : "pemanasan / gagal baca"}
-          tone={sensorsReady ? "good" : "warn"}
-        />
-        <Row
-          label="Kalibrasi tekanan"
-          value={pressureCalibrated ? "terkalibrasi" : "belum"}
-          tone={pressureCalibrated ? "good" : "warn"}
-        />
-        <Row
-          label="Kalibrasi pH"
-          value={phCalibrated ? "terkalibrasi" : "belum"}
-          tone={phCalibrated ? "good" : "warn"}
-        />
-        <Row
-          label="Buffer offline"
-          value={buffered > 0 ? `${buffered} sampel` : "kosong"}
-          tone={buffered > 0 ? "warn" : "good"}
-        />
-        <Row label="Firmware" value={firmware} />
-        <Row label="Data terakhir" value={relativeTime(lastSeen)} />
+      <div className="grid grid-cols-1 gap-x-8 px-4 py-1 sm:grid-cols-2">
+        <div>
+          <MetricRow
+            label="Sinyal WiFi"
+            value={rssi === 0 ? "—" : rssi}
+            unit={rssi === 0 ? undefined : "dBm"}
+            tone={rssi === 0 ? "muted" : rssi > -70 ? "ink" : "danger"}
+          />
+          <MetricRow
+            label="Sensor siap"
+            value={sensorsReady ? "ya" : "belum"}
+            tone={sensorsReady ? "brand" : "danger"}
+          />
+          <MetricRow
+            label="Kalibrasi tekanan"
+            value={pressureCalibrated ? "selesai" : "belum"}
+            tone={pressureCalibrated ? "brand" : "danger"}
+          />
+          <MetricRow
+            label="Kalibrasi pH"
+            value={phCalibrated ? "selesai" : "belum"}
+            tone={phCalibrated ? "brand" : "danger"}
+          />
+        </div>
+        <div>
+          <MetricRow
+            label="Buffer offline"
+            value={buffered > 0 ? buffered : 0}
+            unit="sampel"
+            tone={buffered > 0 ? "danger" : "muted"}
+          />
+          <MetricRow label="Firmware" value={firmware} tone="muted" />
+          <MetricRow
+            label="Data terakhir"
+            value={relativeTime(lastSeen)}
+            tone="muted"
+          />
+          <MetricRow
+            label="Kanal"
+            value={link === "live" ? "backend" : "simulator"}
+            tone="muted"
+          />
+        </div>
       </div>
-    </Card>
+    </Panel>
   );
 }
 
@@ -126,6 +114,45 @@ const mqGases = [
   { key: "ch4", label: "MQ-4 (CH₄)" },
   { key: "leak", label: "MQ-4 udara" },
 ] as const;
+
+const inputClass =
+  "h-9 w-full rounded-[4px] border border-line/60 bg-surface px-2.5 font-mono text-[12.5px] text-ink transition-colors focus:border-brand focus:outline-none disabled:bg-info-50 disabled:text-muted";
+
+function Step({
+  index,
+  title,
+  hint,
+  children,
+  last,
+}: {
+  index: string;
+  title: string;
+  hint?: string;
+  children: React.ReactNode;
+  last?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex flex-col gap-2.5 px-4 py-3.5",
+        last ? "flex-1" : "border-b border-line/30",
+      )}
+    >
+      <div className="flex items-baseline justify-between gap-3">
+        <div className="flex items-baseline gap-2">
+          <span className="font-mono text-[10px] text-muted">{index}</span>
+          <SectionLabel className="tracking-[0.06em] text-ink-2">
+            {title}
+          </SectionLabel>
+        </div>
+        {hint ? (
+          <span className="font-mono text-[10px] text-muted">{hint}</span>
+        ) : null}
+      </div>
+      {children}
+    </div>
+  );
+}
 
 export function CalibrationPanel({ className }: { className?: string }) {
   const {
@@ -144,55 +171,51 @@ export function CalibrationPanel({ className }: { className?: string }) {
   const [gas, setGas] = useState<(typeof mqGases)[number]["key"]>("h2s");
   const [refPpm, setRefPpm] = useState("0");
 
-  const inputClass =
-    "h-10 w-full rounded-lg border border-info-300 bg-info-50 px-3 text-[13px] font-semibold text-ink focus:border-brand focus:outline-none disabled:opacity-50";
-
   return (
-    <Card className={cn("flex flex-col gap-4 p-4", className)}>
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <SectionLabel>Kalibrasi</SectionLabel>
-          <h3 className="mt-1 text-lg font-semibold text-ink">
-            Sensor &amp; Aktuator
-          </h3>
-        </div>
-        <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-info-100 text-brand">
-          <FlaskConical className="size-5" />
-        </span>
-      </div>
+    <Panel className={cn("flex flex-col", className)}>
+      <PanelHead
+        label="Kalibrasi"
+        title="Sensor & Aktuator"
+        right={
+          <div className="flex items-center gap-1.5">
+            <StatusBadge tone={pressureCalibrated ? "good" : "warn"}>
+              Tekanan {pressureCalibrated ? "siap" : "belum"}
+            </StatusBadge>
+            <StatusBadge tone={phCalibrated ? "good" : "warn"}>
+              pH {phCalibrated ? "siap" : "belum"}
+            </StatusBadge>
+          </div>
+        }
+      />
 
       {!canCommand ? (
-        <p className="flex items-start gap-2 rounded-lg bg-danger-200 p-3 text-[12px] font-medium text-danger-800">
-          <ShieldQuestion className="mt-0.5 size-4 shrink-0" />
-          Perintah belum bisa dikirim: dashboard masih mode demo atau backend
-          belum tersambung. Nilai di bawah tidak akan sampai ke alat.
-        </p>
+        <div className="flex items-start gap-2 border-b border-line/30 bg-info-50 px-4 py-2.5">
+          <ShieldAlert className="mt-px size-3.5 shrink-0 text-danger" strokeWidth={1.75} />
+          <p className="text-[11px] leading-4 text-ink-2">
+            Perintah belum bisa dikirim: dashboard masih mode demo atau backend
+            belum tersambung. Nilai di bawah tidak sampai ke alat.
+          </p>
+        </div>
       ) : null}
 
-      <div className="flex flex-wrap gap-2">
-        <StatusPill tone={pressureCalibrated ? "good" : "warn"}>
-          <Gauge className="size-3.5" /> Tekanan{" "}
-          {pressureCalibrated ? "siap" : "belum"}
-        </StatusPill>
-        <StatusPill tone={phCalibrated ? "good" : "warn"}>
-          <FlaskConical className="size-3.5" /> pH{" "}
-          {phCalibrated ? "siap" : "belum"}
-        </StatusPill>
-        <Button
-          variant="soft"
-          size="sm"
-          icon={RotateCcw}
-          disabled={!canCommand}
-          onClick={() => tare()}
-        >
-          Tare tekanan
-        </Button>
-      </div>
+      <Step index="01" title="Tare tekanan" hint="nolkan kedua sensor">
+        <div className="flex items-center gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={RotateCcw}
+            disabled={!canCommand}
+            onClick={() => tare()}
+          >
+            Tare
+          </Button>
+          <p className="text-[10.5px] leading-4 text-muted">
+            Lakukan tanpa tekanan, sebelum 2 titik.
+          </p>
+        </div>
+      </Step>
 
-      <div className="flex flex-col gap-2 rounded-lg bg-info-50 p-3">
-        <p className="text-[12px] font-semibold text-ink">
-          Kalibrasi tekanan (2 titik)
-        </p>
+      <Step index="02" title="Tekanan · 2 titik" hint="kPa">
         <div className="grid grid-cols-2 gap-2">
           <select
             value={sensor}
@@ -228,16 +251,9 @@ export function CalibrationPanel({ className }: { className?: string }) {
         >
           Kirim titik {Number(kpa).toFixed(1)} kPa
         </Button>
-        <p className="text-[11px] text-muted">
-          Lakukan dua kali dengan tekanan berbeda (mis. 1.0 lalu 2.5 kPa). Mode
-          otomatis terkunci sampai kedua sensor selesai.
-        </p>
-      </div>
+      </Step>
 
-      <div className="flex flex-col gap-2 rounded-lg bg-info-50 p-3">
-        <p className="text-[12px] font-semibold text-ink">
-          Kalibrasi pH (buffer 6.86 → 4.01)
-        </p>
+      <Step index="03" title="pH · buffer 6.86 → 4.01" hint="2 titik">
         <div className="grid grid-cols-2 gap-2">
           <Button
             size="sm"
@@ -256,12 +272,12 @@ export function CalibrationPanel({ className }: { className?: string }) {
             4.01
           </Button>
         </div>
-      </div>
-
-      <div className="flex flex-col gap-2 rounded-lg bg-info-50 p-3">
-        <p className="text-[12px] font-semibold text-ink">
-          Kalibrasi MQ (R0)
+        <p className="text-[10.5px] leading-4 text-muted">
+          Bilas probe di air bersih sebelum titik kedua.
         </p>
+      </Step>
+
+      <Step index="04" title="MQ · R0" hint="referensi" last>
         <div className="grid grid-cols-2 gap-2">
           <select
             value={gas}
@@ -294,16 +310,22 @@ export function CalibrationPanel({ className }: { className?: string }) {
           disabled={!canCommand || !Number.isFinite(Number(refPpm))}
           onClick={() => calibrateMq(gas, Number(refPpm))}
         >
-          Set R0 ({Number(refPpm) === 0 ? "udara bersih" : `${refPpm} ppm`})
+          Set R0 · {Number(refPpm) === 0 ? "udara bersih" : `${refPpm} ppm`}
         </Button>
-      </div>
+      </Step>
 
-      <p className="flex items-center gap-1.5 text-[11px] text-muted">
-        <Radio className="size-3.5" /> Perintah dikirim ke topik{" "}
-        <code>nexgas/&lt;id&gt;/cmd</code> lewat backend.
-        <Wifi className="size-3.5" />
-        <Cpu className="size-3.5" />
-      </p>
-    </Card>
+      <div className="flex items-center gap-2 border-t border-line/35 px-4 py-2.5">
+        <FlaskConical className="size-3.5 text-muted" strokeWidth={1.75} />
+        <p className="font-mono text-[10px] leading-4 text-muted">
+          nexgas/&lt;id&gt;/cmd · lewat backend
+        </p>
+        <Readout
+          value={pressureCalibrated && phCalibrated ? "siap" : "terkunci"}
+          size="sm"
+          tone={pressureCalibrated && phCalibrated ? "brand" : "muted"}
+          className="ml-auto"
+        />
+      </div>
+    </Panel>
   );
 }

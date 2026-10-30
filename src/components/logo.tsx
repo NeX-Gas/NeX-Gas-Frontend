@@ -4,11 +4,11 @@ export function LogoMark({ className }: { className?: string }) {
   return (
     <span
       className={cn(
-        "relative grid size-8 shrink-0 place-items-center rounded-[0.6rem] bg-brand text-white shadow-sm",
+        "relative grid size-8 shrink-0 place-items-center rounded-[4px] bg-brand text-white",
         className,
       )}
     >
-      <svg viewBox="0 0 24 24" className="size-5" aria-hidden="true">
+      <svg viewBox="0 0 24 24" className="size-[70%]" aria-hidden="true">
         <path
           d="M12 21c3.6 0 6.5-2.5 6.5-6 0-2.6-1.7-4.6-3.4-6.2C13.6 7.3 12 5.4 12 3c0 0-6.5 4.2-6.5 9.2 0 4.6 2.9 8.8 6.5 8.8Z"
           fill="currentColor"
@@ -44,7 +44,7 @@ export function Logo({
       <span className="flex flex-col leading-none">
         <span
           className={cn(
-            "text-[15px] font-semibold tracking-tight",
+            "text-[14px] font-semibold tracking-[0.02em]",
             onDark ? "text-white" : "text-ink",
           )}
         >
@@ -53,7 +53,7 @@ export function Logo({
         {subtitle ? (
           <span
             className={cn(
-              "mt-0.5 text-[11px] font-semibold tracking-wide",
+              "mt-1 text-[10px] font-medium tracking-[0.06em] uppercase",
               onDark ? "text-white/70" : "text-ink-2",
             )}
           >

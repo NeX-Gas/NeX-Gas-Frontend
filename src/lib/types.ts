@@ -25,6 +25,14 @@ export type AppNotification = {
 
 export type Threshold = { at: number; tone: "normal" | "warn" };
 
+/** Satu tanda skala di bawah meter: posisi persen + label nilai (dan keterangan). */
+export type ScaleTick = {
+  at: number;
+  label: string;
+  caption?: string;
+  tone?: "normal" | "warn";
+};
+
 export type FilterUnit = {
   id: string;
   kind: string;
@@ -33,7 +41,7 @@ export type FilterUnit = {
   status: { text: string; tone: Tone };
   saturation: number;
   thresholds: Threshold[];
-  scale: string[];
+  scale: ScaleTick[];
   noteTitle: string;
   noteBody: string;
   noteTone: Tone;

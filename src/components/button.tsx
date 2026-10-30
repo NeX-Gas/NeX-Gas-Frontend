@@ -6,17 +6,18 @@ type Variant = "primary" | "secondary" | "soft" | "ghost";
 type Size = "md" | "sm" | "lg";
 
 const variants: Record<Variant, string> = {
-  primary: "bg-brand text-white hover:bg-brand-deep active:bg-brand-deep",
+  primary:
+    "bg-brand text-white hover:bg-brand-deep active:bg-brand-dark disabled:bg-info-200 disabled:text-muted",
   secondary:
-    "bg-surface text-ink hover:bg-info-50 active:bg-info-100 card-shadow",
-  soft: "bg-info-200 text-ink hover:bg-info-300 active:bg-info-400",
-  ghost: "text-ink-2 hover:bg-info-100 active:bg-info-200",
+    "border border-line/60 bg-surface text-ink hover:border-line hover:bg-info-50 active:bg-info-100 disabled:border-line/40 disabled:bg-info-50 disabled:text-muted",
+  soft: "bg-info-100 text-ink hover:bg-info-200 active:bg-info-300 disabled:bg-info-50 disabled:text-muted",
+  ghost: "text-ink-2 hover:bg-info-50 active:bg-info-100 disabled:text-muted",
 };
 
 const sizes: Record<Size, string> = {
-  sm: "h-10 px-3.5 text-[13px] rounded-lg gap-2",
-  md: "h-12 px-5 text-[15px] rounded-xl gap-2.5",
-  lg: "h-13 px-6 text-base rounded-xl gap-2.5",
+  sm: "h-9 px-3 text-[12.5px] rounded-[4px] gap-1.5",
+  md: "h-10 px-4 text-[13px] rounded-[4px] gap-2",
+  lg: "h-12 px-5 text-[14px] rounded-[4px] gap-2",
 };
 
 type BaseProps = {
@@ -30,20 +31,15 @@ type BaseProps = {
 };
 
 function inner({ icon: Icon, iconRight: IconRight, size = "md", children }: BaseProps) {
+  const iconSize = size === "sm" ? "size-3.5" : "size-4";
   return (
     <>
       {Icon ? (
-        <Icon
-          className={cn(size === "sm" ? "size-4" : "size-[18px]", "shrink-0")}
-          strokeWidth={2}
-        />
+        <Icon className={cn(iconSize, "shrink-0")} strokeWidth={1.75} />
       ) : null}
       {children ? <span className="truncate">{children}</span> : null}
       {IconRight ? (
-        <IconRight
-          className={cn(size === "sm" ? "size-4" : "size-[18px]", "shrink-0")}
-          strokeWidth={2}
-        />
+        <IconRight className={cn(iconSize, "shrink-0")} strokeWidth={1.75} />
       ) : null}
     </>
   );
@@ -51,9 +47,9 @@ function inner({ icon: Icon, iconRight: IconRight, size = "md", children }: Base
 
 function classes({ variant = "primary", size = "md", fullWidth, className }: BaseProps) {
   return cn(
-    "inline-flex items-center justify-center font-semibold transition-colors select-none",
-    "focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:outline-none",
-    "disabled:pointer-events-none disabled:opacity-50",
+    "inline-flex items-center justify-center font-semibold tracking-[-0.005em] transition-colors select-none",
+    "focus-visible:ring-2 focus-visible:ring-brand/35 focus-visible:ring-offset-1 focus-visible:outline-none",
+    "disabled:pointer-events-none",
     variants[variant],
     sizes[size],
     fullWidth && "w-full",

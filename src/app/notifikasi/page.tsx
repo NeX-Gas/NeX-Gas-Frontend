@@ -1,19 +1,16 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import {
-  Activity,
-  BookOpen,
-  CalendarClock,
-  CheckCheck,
-  Gauge,
-  MoreVertical,
-  ShieldCheck,
-  Siren,
-  TriangleAlert,
-} from "lucide-react";
+import { Check, CheckCheck, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/button";
-import { Card, StatusBadge } from "@/components/ui";
+import {
+  MetricRow,
+  Panel,
+  PanelHead,
+  ScreenTitle,
+  SectionLabel,
+  StatusBadge,
+} from "@/components/ui";
 import { useAppStore } from "@/components/app-store";
 import type { AppNotification, NotificationSeverity } from "@/lib/types";
 import { cn } from "@/lib/cn";
@@ -22,123 +19,130 @@ type FilterKey = "semua" | "peringatan" | "info";
 
 const severity: Record<
   NotificationSeverity,
-  {
-    badge: "warn" | "danger" | "info";
-    iconBg: string;
-    iconColor: string;
-    Icon: typeof TriangleAlert;
-  }
+  { badge: "warn" | "danger" | "info"; rail: string }
 > = {
-  waspada: {
-    badge: "warn",
-    iconBg: "bg-danger-200",
-    iconColor: "text-danger",
-    Icon: TriangleAlert,
-  },
-  bahaya: {
-    badge: "danger",
-    iconBg: "bg-danger-400",
-    iconColor: "text-danger-800",
-    Icon: Siren,
-  },
-  info: {
-    badge: "info",
-    iconBg: "bg-info-400",
-    iconColor: "text-brand",
-    Icon: Gauge,
-  },
-  jadwal: {
-    badge: "info",
-    iconBg: "bg-info-400",
-    iconColor: "text-muted-2",
-    Icon: CalendarClock,
-  },
+  waspada: { badge: "warn", rail: "bg-danger-300" },
+  bahaya: { badge: "danger", rail: "bg-danger" },
+  info: { badge: "info", rail: "bg-info-300" },
+  jadwal: { badge: "info", rail: "bg-line" },
 };
 
-function DiagnosticBanner({ className }: { className?: string }) {
+function FilterTabs({
+  value,
+  onChange,
+  chips,
+}: {
+  value: FilterKey;
+  onChange: (k: FilterKey) => void;
+  chips: { key: FilterKey; label: string; count: number }[];
+}) {
   return (
-    <Card className={cn("flex items-start gap-3 bg-info-200 p-4", className)}>
-      <Activity className="mt-0.5 size-5 shrink-0 text-brand" />
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center justify-between gap-3">
-          <h3 className="text-[15px] font-semibold text-ink">
-            Pengecekan Rutin Sensor
-          </h3>
-          <span className="text-[13px] font-semibold text-brand">Aktif</span>
-        </div>
-        <p className="mt-1 text-sm text-ink-2">
-          Semua 4 unit pemantau bio-digester tersambung via telemetry nirkabel.
-        </p>
-      </div>
-    </Card>
+    <div
+      role="group"
+      aria-label="Filter notifikasi"
+      className="no-scrollbar -mx-4 flex gap-0.5 overflow-x-auto border-b border-line/35 px-4 lg:mx-0 lg:px-0"
+    >
+      {chips.map((chip) => {
+        const active = value === chip.key;
+        return (
+          <button
+            key={chip.key}
+            type="button"
+            onClick={() => onChange(chip.key)}
+            aria-pressed={active}
+            className={cn(
+              "relative flex shrink-0 items-center gap-1.5 px-3 pb-2.5 text-[12.5px] font-medium transition-colors",
+              active ? "text-brand-deep" : "text-muted hover:text-ink",
+            )}
+          >
+            {chip.label}
+            <span className="font-mono text-[10.5px] tnum">{chip.count}</span>
+            {active ? (
+              <span className="absolute inset-x-2 -bottom-px h-0.5 bg-brand" />
+            ) : null}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
-function NotificationCard({ item }: { item: AppNotification }) {
+function NotificationRow({
+  item,
+  index,
+}: {
+  item: AppNotification;
+  index: number;
+}) {
   const { markRead, notify } = useAppStore();
   const cfg = severity[item.severity];
-  const Icon = cfg.Icon;
 
   return (
-    <Card className="animate-fade-up relative flex flex-col gap-3 p-4">
-      {item.unread ? (
-        <span className="absolute top-4 right-4 size-3 rounded-full bg-brand" />
-      ) : null}
+    <li
+      className={cn(
+        "relative py-3.5 pr-4 pl-4",
+        index > 0 && "border-t border-line/30",
+      )}
+    >
+      <span
+        className={cn("absolute inset-y-0 left-0 w-[3px]", cfg.rail)}
+        aria-hidden="true"
+      />
 
-      <div className="flex gap-3">
-        <span
-          className={cn(
-            "grid size-12 shrink-0 place-items-center rounded-xl",
-            cfg.iconBg,
-            cfg.iconColor,
-          )}
-        >
-          <Icon className="size-6" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <StatusBadge tone={cfg.badge}>{item.badge}</StatusBadge>
-            <span className="text-[13px] font-semibold text-ink-2">
-              {item.time}
-            </span>
-          </div>
-          <h3 className="mt-1.5 text-lg leading-[1.35] font-semibold whitespace-pre-line text-ink">
-            {item.title}
-          </h3>
-          <p className="mt-1 text-sm leading-[1.6] whitespace-pre-line text-ink-2">
-            {item.body}
-          </p>
-        </div>
+      <div className="flex items-center gap-2.5">
+        <StatusBadge tone={cfg.badge}>{item.badge}</StatusBadge>
+        <span className="font-mono text-[10.5px] text-muted">{item.time}</span>
+        {item.unread ? (
+          <span
+            className="size-1.5 rounded-[1px] bg-brand"
+            aria-label="Belum dibaca"
+          />
+        ) : null}
       </div>
 
-      <div className="flex items-center justify-between gap-3 pt-1">
-        <Button
-          variant="soft"
-          size="sm"
-          icon={BookOpen}
-          onClick={() => {
-            markRead(item.id);
-            notify(`Membuka: ${item.action}`);
-          }}
-        >
-          {item.action}
-        </Button>
-        <button
-          type="button"
-          onClick={() => markRead(item.id)}
-          aria-label="Tandai dibaca"
-          className="grid size-10 place-items-center rounded-lg text-ink-2 hover:bg-info-100"
-        >
-          <MoreVertical className="size-5" />
-        </button>
+      <h3 className="mt-1.5 text-[14px] leading-5 font-semibold text-ink">
+        {item.title}
+      </h3>
+      <p className="mt-1 text-[12.5px] leading-5 text-ink-2">
+        {item.body}
+      </p>
+
+      <div className="mt-2 flex items-center gap-3">
+        {item.action ? (
+          <button
+            type="button"
+            onClick={() => {
+              markRead(item.id);
+              notify(`Membuka: ${item.action}`);
+            }}
+            className="text-[11.5px] font-medium text-brand underline decoration-brand/30 underline-offset-[3px] transition-colors hover:text-brand-deep"
+          >
+            {item.action}
+          </button>
+        ) : null}
+        {item.unread ? (
+          <button
+            type="button"
+            onClick={() => markRead(item.id)}
+            className="ml-auto inline-flex items-center gap-1 text-[11px] text-muted transition-colors hover:text-ink-2"
+          >
+            <Check className="size-3" strokeWidth={2} />
+            tandai dibaca
+          </button>
+        ) : null}
       </div>
-    </Card>
+    </li>
   );
 }
 
 export default function NotifikasiPage() {
-  const { notifications, unreadCount, criticalCount, markAllRead } =
-    useAppStore();
+  const {
+    notifications,
+    unreadCount,
+    criticalCount,
+    markAllRead,
+    link,
+  } = useAppStore();
   const [filter, setFilter] = useState<FilterKey>("semua");
 
   const infoCount = notifications.filter((n) => n.category === "info").length;
@@ -148,86 +152,97 @@ export default function NotifikasiPage() {
     return notifications.filter((n) => n.category === filter);
   }, [filter, notifications]);
 
+  const bySeverity = useMemo(() => {
+    const counts: Record<NotificationSeverity, number> = {
+      bahaya: 0,
+      waspada: 0,
+      info: 0,
+      jadwal: 0,
+    };
+    notifications.forEach((n) => {
+      counts[n.severity] += 1;
+    });
+    return counts;
+  }, [notifications]);
+
   const chips: { key: FilterKey; label: string; count: number }[] = [
     { key: "semua", label: "Semua", count: notifications.length },
-    { key: "peringatan", label: "Peringatan Penting", count: criticalCount },
-    { key: "info", label: "Info Operasional", count: infoCount },
+    { key: "peringatan", label: "Peringatan", count: criticalCount },
+    { key: "info", label: "Info", count: infoCount },
   ];
 
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:gap-6">
-      <div className="flex items-start justify-between gap-3 lg:col-span-12">
-        <div>
-          <h1 className="text-[22px] leading-7 font-semibold tracking-[-0.02em] text-ink">
-            Notifikasi Sistem
-          </h1>
-          <p className="mt-1 max-w-xs text-sm text-ink-2">
-            {criticalCount} peringatan penting memerlukan tindakan
-          </p>
+    <div className="flex flex-col gap-4 lg:gap-5">
+      <ScreenTitle
+        title="Notifikasi"
+        subtitle={
+          criticalCount > 0
+            ? `${criticalCount} peringatan penting memerlukan tindakan`
+            : "Tidak ada peringatan yang belum ditangani"
+        }
+        actions={
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={CheckCheck}
+            disabled={unreadCount === 0}
+            onClick={markAllRead}
+          >
+            Tandai dibaca
+          </Button>
+        }
+      />
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:gap-5">
+        <div className="lg:col-span-8">
+          <FilterTabs value={filter} onChange={setFilter} chips={chips} />
+
+          <Panel className="mt-3 overflow-hidden">
+            <ul>
+              {filtered.map((item, i) => (
+                <NotificationRow key={item.id} item={item} index={i} />
+              ))}
+            </ul>
+            {filtered.length === 0 ? (
+              <div className="flex flex-col items-center gap-2 px-6 py-12 text-center">
+                <ShieldCheck className="size-6 text-brand" strokeWidth={1.5} />
+                <p className="text-[13px] font-medium text-ink">
+                  Tidak ada notifikasi
+                </p>
+                <p className="text-[12px] text-muted">
+                  Semua sistem berjalan normal di kategori ini.
+                </p>
+              </div>
+            ) : null}
+          </Panel>
         </div>
-        <Button
-          variant="soft"
-          size="sm"
-          icon={CheckCheck}
-          disabled={unreadCount === 0}
-          onClick={markAllRead}
-          className="shrink-0"
-        >
-          Tandai Dibaca
-        </Button>
+
+        <div className="flex flex-col gap-4 lg:col-span-4">
+          <Panel>
+            <PanelHead label="Ringkasan" title="Kondisi Sistem" />
+            <div className="px-4 pb-2">
+              <MetricRow label="Bahaya" value={bySeverity.bahaya} tone={bySeverity.bahaya > 0 ? "danger" : "muted"} />
+              <MetricRow label="Waspada" value={bySeverity.waspada} tone={bySeverity.waspada > 0 ? "danger" : "muted"} />
+              <MetricRow label="Info" value={bySeverity.info} />
+              <MetricRow label="Jadwal" value={bySeverity.jadwal} />
+              <MetricRow label="Belum dibaca" value={unreadCount} tone={unreadCount > 0 ? "brand" : "muted"} />
+            </div>
+            <p className="border-t border-line/35 px-4 py-2.5 font-mono text-[10px] leading-4 text-muted">
+              sumber: {link === "live" ? "firmware via backend" : "simulator lokal"}
+              {" · "}tersimpan di perangkat ini
+            </p>
+          </Panel>
+
+          <Panel className="p-4">
+            <SectionLabel>Tentang kanal ini</SectionLabel>
+            <p className="mt-1.5 text-[12px] leading-5 text-ink-2">
+              {link === "live"
+                ? "Peristiwa dari firmware (boot, kebocoran, penampung penuh, filter jenuh) masuk ke daftar ini secara otomatis."
+                : "Dashboard masih memakai simulator. Notifikasi di sini adalah contoh dan tidak berasal dari alat."}
+            </p>
+          </Panel>
+        </div>
       </div>
-
-      <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 lg:col-span-12 lg:mx-0 lg:px-0">
-        {chips.map((chip) => {
-          const active = filter === chip.key;
-          const danger = chip.key === "peringatan";
-          return (
-            <button
-              key={chip.key}
-              type="button"
-              onClick={() => setFilter(chip.key)}
-              className={cn(
-                "flex shrink-0 items-center gap-2 rounded-full px-4 py-2.5 text-[13px] font-semibold transition-colors",
-                active
-                  ? "bg-brand text-white"
-                  : "bg-info-200 text-ink-2 hover:bg-info-300",
-              )}
-            >
-              {chip.label}
-              <span
-                className={cn(
-                  "grid min-w-5 place-items-center rounded-full px-1.5 py-0.5 text-[11px] font-bold",
-                  active
-                    ? "bg-white text-brand"
-                    : danger
-                      ? "bg-danger-400 text-danger-800"
-                      : "bg-info-400 text-ink-2",
-                )}
-              >
-                {chip.count}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-
-      <DiagnosticBanner className="lg:col-span-12" />
-
-      <div className="grid grid-cols-1 gap-3 lg:col-span-12 lg:grid-cols-2">
-        {filtered.map((item) => (
-          <NotificationCard key={item.id} item={item} />
-        ))}
-      </div>
-
-      {filtered.length === 0 ? (
-        <Card className="flex flex-col items-center gap-2 p-8 text-center lg:col-span-12">
-          <ShieldCheck className="size-8 text-brand" />
-          <p className="font-semibold text-ink">Tidak ada notifikasi</p>
-          <p className="text-sm text-ink-2">
-            Semua sistem berjalan normal di kategori ini.
-          </p>
-        </Card>
-      ) : null}
     </div>
   );
 }
