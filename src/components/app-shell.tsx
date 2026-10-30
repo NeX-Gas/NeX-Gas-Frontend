@@ -2,9 +2,16 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowLeft, Bell, User } from "lucide-react";
+import {
+  ArrowLeft,
+  Bell,
+  PanelLeftClose,
+  PanelLeftOpen,
+  User,
+} from "lucide-react";
 import { Logo, LogoMark } from "@/components/logo";
 import { useAppStore } from "@/components/app-store";
+import { usePersistentState } from "@/lib/storage";
 import { navItems, pageTitles } from "@/lib/nav";
 import { cn } from "@/lib/cn";
 
@@ -15,33 +22,75 @@ function useActive() {
   return { pathname, isActive };
 }
 
-function Sidebar() {
+function Sidebar({
+  collapsed,
+  onToggle,
+}: {
+  collapsed: boolean;
+  onToggle: () => void;
+}) {
   const { isActive } = useActive();
-  const { criticalCount } = useAppStore();
+  const { criticalCount, link, deviceOnline } = useAppStore();
+  const isLive = link === "live" && deviceOnline;
+  const unitLabel =
+    link === "live"
+      ? deviceOnline
+        ? "Online"
+        : "Offline"
+      : link === "demo"
+        ? "Mode demo"
+        : link === "connecting"
+          ? "Menghubungkan…"
+          : "Backend offline";
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r border-info-100 bg-surface lg:flex">
-      <div className="px-6 py-6">
-        <Logo subtitle="Monitoring Biogas" />
+    <aside
+      className={cn(
+        "fixed inset-y-0 left-0 z-40 hidden flex-col border-r border-info-100 bg-surface transition-[width] duration-200 ease-out lg:flex",
+        collapsed ? "w-20" : "w-64",
+      )}
+    >
+      <div
+        className={cn(
+          "flex items-center py-6",
+          collapsed ? "justify-center px-3" : "px-6",
+        )}
+      >
+        {collapsed ? (
+          <LogoMark className="size-9 rounded-xl" />
+        ) : (
+          <Logo subtitle="Monitoring Biogas" />
+        )}
       </div>
-      <nav className="flex flex-1 flex-col gap-1 px-3">
+
+      <nav className={cn("flex flex-1 flex-col gap-1", collapsed ? "px-2" : "px-3")}>
         {navItems.map((item) => {
           const active = isActive(item.href);
           const Icon = item.icon;
+          const badge = item.href === "/notifikasi" && criticalCount > 0;
           return (
             <Link
               key={item.href}
               href={item.href}
+              aria-label={item.label}
+              aria-current={active ? "page" : undefined}
+              title={collapsed ? item.label : undefined}
               className={cn(
-                "group flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold transition-colors",
+                "group relative flex items-center gap-3 rounded-xl py-3 text-sm font-semibold transition-colors",
+                collapsed ? "justify-center px-2" : "px-3",
                 active
                   ? "bg-info-100 text-brand"
                   : "text-ink-2 hover:bg-info-50 hover:text-ink",
               )}
             >
-              <Icon className="size-5" strokeWidth={2} />
-              <span className="flex-1">{item.label}</span>
-              {item.href === "/notifikasi" && criticalCount > 0 ? (
+              <span className="relative">
+                <Icon className="size-5" strokeWidth={2} />
+                {badge && collapsed ? (
+                  <span className="absolute -right-1 -top-1 size-2 rounded-full bg-danger ring-2 ring-surface" />
+                ) : null}
+              </span>
+              {!collapsed ? <span className="flex-1">{item.label}</span> : null}
+              {badge && !collapsed ? (
                 <span className="grid size-5 place-items-center rounded-full bg-danger text-[11px] font-bold text-white">
                   {criticalCount}
                 </span>
@@ -50,15 +99,59 @@ function Sidebar() {
           );
         })}
       </nav>
-      <div className="m-3 rounded-xl bg-info-50 p-4">
-        <div className="flex items-center gap-2">
-          <span className="size-2 rounded-full bg-brand-400" />
-          <span className="text-[13px] font-semibold text-ink">Unit #01 Online</span>
-        </div>
-        <p className="mt-1 text-[12px] leading-4 text-ink-2">
-          Telemetri nirkabel aktif • sinyal penuh
-        </p>
+
+      <div className={cn(collapsed ? "mx-2 mb-2" : "m-3")}>
+        {collapsed ? (
+          <div
+            title={`Unit #01 ${unitLabel}`}
+            className="grid place-items-center rounded-xl bg-info-50 py-3"
+          >
+            <span
+              className={cn(
+                "size-2.5 rounded-full",
+                isLive ? "bg-brand-400" : "bg-muted",
+              )}
+            />
+          </div>
+        ) : (
+          <div className="rounded-xl bg-info-50 p-4">
+            <div className="flex items-center gap-2">
+              <span
+                className={cn(
+                  "size-2 rounded-full",
+                  isLive ? "bg-brand-400" : "bg-muted",
+                )}
+              />
+              <span className="text-[13px] font-semibold text-ink">
+                Unit #01 {unitLabel}
+              </span>
+            </div>
+            <p className="mt-1 text-[12px] leading-4 text-ink-2">
+              {link === "demo"
+                ? "Simulator lokal • belum ada backend"
+                : "Telemetri nirkabel • data dari backend"}
+            </p>
+          </div>
+        )}
       </div>
+
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={!collapsed}
+        aria-label={collapsed ? "Buka menu navigasi" : "Tutup menu navigasi"}
+        title={collapsed ? "Buka menu" : "Tutup menu"}
+        className="mx-3 mb-4 inline-flex items-center gap-2 rounded-xl px-3 py-2.5 text-[12px] font-semibold text-ink-2 transition-colors hover:bg-info-50 hover:text-ink focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:outline-none"
+      >
+        <span className="grid size-9 shrink-0 place-items-center rounded-lg border border-info-100 bg-canvas">
+          {collapsed ? (
+            <PanelLeftOpen className="size-[18px]" strokeWidth={2} />
+          ) : (
+            <PanelLeftClose className="size-[18px]" strokeWidth={2} />
+          )}
+        </span>
+        {!collapsed ? <span>Ringkas menu</span> : null}
+      </button>
     </aside>
   );
 }
@@ -170,10 +263,20 @@ function BottomNav() {
 }
 
 export function AppShell({ children }: { children: React.ReactNode }) {
+  const [collapsed, setCollapsed] = usePersistentState<boolean>(
+    "sidebar-collapsed",
+    false,
+  );
+
   return (
     <div className="min-h-dvh bg-canvas">
-      <Sidebar />
-      <div className="lg:pl-64">
+      <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((prev) => !prev)} />
+      <div
+        className={cn(
+          "transition-[padding] duration-200 ease-out",
+          collapsed ? "lg:pl-20" : "lg:pl-64",
+        )}
+      >
         <MobileHeader />
         <DesktopTopBar />
         <main className="mx-auto w-full max-w-md px-4 pt-4 pb-28 lg:max-w-5xl lg:px-8 lg:pt-4 lg:pb-16">

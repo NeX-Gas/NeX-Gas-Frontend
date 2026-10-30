@@ -4,6 +4,7 @@ import { ChevronRight, Languages, Leaf, Radio, User } from "lucide-react";
 import { Card, IconTile, SectionLabel } from "@/components/ui";
 import { useAppStore } from "@/components/app-store";
 import { CalibrationPanel, DeviceStatusCard } from "@/components/device-panel";
+import { BackendPanel } from "@/components/backend-panel";
 import { operationalSettings } from "@/lib/mock";
 import { THRESHOLDS } from "@/lib/system";
 import type { Language } from "@/lib/types";
@@ -129,8 +130,10 @@ export default function PengaturanPage() {
 
       <DeviceStatusCard className="lg:col-span-12" />
 
+      <BackendPanel className="lg:col-span-5" />
+
       <CalibrationPanel className="lg:col-span-7" />
-      <div className="flex flex-col gap-4 lg:col-span-5 lg:gap-6">
+      <div className="flex flex-col gap-4 lg:col-span-12 lg:gap-6">
         <Preferences />
         <ParameterSection />
       </div>
