@@ -16,14 +16,17 @@ import {
   notifications as seedNotifications,
   replacementLogs as seedReplacementLogs,
 } from "@/lib/mock";
-import { computeNext, initialSystem, THRESHOLDS } from "@/lib/system";
+import { THRESHOLDS } from "@/lib/system";
+import { useDevice } from "@/lib/use-device";
 import type {
   AppNotification,
+  DeviceCommand,
+  DeviceLink,
   FilterUnit,
+  FirmwareEvent,
   Language,
   LogEntry,
   ReplacementLog,
-  SystemState,
   Telemetry,
   ValveMode,
 } from "@/lib/types";
@@ -44,6 +47,13 @@ type AppStore = {
   filterHealth: number;
   filterWarning: boolean;
   leakWarning: boolean;
+  /** `live` = data alat asli, `demo` = simulator lokal */
+  link: DeviceLink;
+  deviceOnline: boolean;
+  pressureCalibrated: boolean;
+  phCalibrated: boolean;
+  firmware: string;
+  sendCommand: (command: DeviceCommand) => boolean;
   addLog: (inputKg: number, gas: string) => void;
   markAllRead: () => void;
   markRead: (id: string) => void;
@@ -70,9 +80,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     useState<ReplacementLog[]>(seedReplacementLogs);
   const [language, setLanguageState] = useState<Language>("id");
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const [system, setSystem] = useState<SystemState>(initialSystem);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const systemRef = useRef(system);
   const warnRef = useRef({ filter: false, leak: false });
 
   const notify = useCallback((message: string) => {
@@ -84,30 +92,33 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     }, 2600);
   }, []);
 
+  const onDeviceEvent = useCallback(
+    (event: FirmwareEvent) => {
+      notify(event.message ?? `Peristiwa alat: ${event.type}`);
+    },
+    [notify],
+  );
+
+  // Sumber data tunggal: backend (WebSocket) atau simulator kalau belum diset.
+  const { state: system, link, sendCommand, patch } = useDevice(onDeviceEvent);
+  const systemRef = useRef(system);
+
   useEffect(() => {
     systemRef.current = system;
   }, [system]);
 
   useEffect(() => {
-    const id = setInterval(() => {
-      const prev = systemRef.current;
-      const next = computeNext(prev);
-      systemRef.current = next;
-      setSystem(next);
-
-      if (next.filterWarning && !warnRef.current.filter) {
-        notify("Peringatan: H₂S tembus filter — segera ganti karbon aktif");
-      }
-      if (next.leakWarning && !warnRef.current.leak) {
-        notify("Bahaya: kebocoran metana terdeteksi — valve ditutup");
-      }
-      warnRef.current = {
-        filter: next.filterWarning,
-        leak: next.leakWarning,
-      };
-    }, 2500);
-    return () => clearInterval(id);
-  }, [notify]);
+    if (system.filterWarning && !warnRef.current.filter) {
+      notify("Peringatan: H₂S tembus filter — segera ganti karbon aktif");
+    }
+    if (system.leakWarning && !warnRef.current.leak) {
+      notify("Bahaya: kebocoran metana terdeteksi — valve ditutup");
+    }
+    warnRef.current = {
+      filter: system.filterWarning,
+      leak: system.leakWarning,
+    };
+  }, [system.filterWarning, system.leakWarning, notify]);
 
   const addLog = useCallback(
     (inputKg: number, gas: string) => {
@@ -166,7 +177,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         ...prev,
       ]);
       notify(`${unit?.name ?? "Filter"} ditandai sudah diganti`);
-      setSystem((prev) => ({
+      patch((prev) => ({
         ...prev,
         filterHealth: 100,
         filterWarning: false,
@@ -174,7 +185,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       }));
       warnRef.current = { ...warnRef.current, filter: false };
     },
-    [filters, notify],
+    [filters, notify, patch],
   );
 
   const setLanguage = useCallback(
@@ -192,14 +203,16 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
 
   const setValveMode = useCallback(
     (mode: ValveMode) => {
-      setSystem((prev) => ({ ...prev, valveMode: mode }));
+      patch((prev) => ({ ...prev, valveMode: mode }));
+      const sent = sendCommand({ mode });
       notify(
         mode === "auto"
           ? "Kontrol valve: OTOMATIS (berdasarkan tekanan)"
           : "Kontrol valve: MANUAL",
       );
+      if (!sent) notify("Mode disimpan lokal — backend belum tersambung");
     },
-    [notify],
+    [notify, patch, sendCommand],
   );
 
   const openValve = useCallback(() => {
@@ -209,17 +222,27 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       notify("Ditolak: kebocoran metana terdeteksi — valve tetap tertutup");
       return;
     }
-    setSystem((prev) => ({ ...prev, valveOpen: true }));
-    notify("Solenoid valve DIBUKA — gas mengalir ke penampung");
-  }, [notify]);
+    patch((prev) => ({ ...prev, valveOpen: true }));
+    const sent = sendCommand({ valve: "open" });
+    notify(
+      sent
+        ? "Solenoid valve DIBUKA — gas mengalir ke penampung"
+        : "Dibuka lokal — backend belum tersambung",
+    );
+  }, [notify, patch, sendCommand]);
 
   const closeValve = useCallback(() => {
-    setSystem((prev) => ({ ...prev, valveOpen: false }));
-    notify("Solenoid valve DITUTUP — gas terkumpul di digester");
-  }, [notify]);
+    patch((prev) => ({ ...prev, valveOpen: false }));
+    const sent = sendCommand({ valve: "close" });
+    notify(
+      sent
+        ? "Solenoid valve DITUTUP — gas terkumpul di digester"
+        : "Ditutup lokal — backend belum tersambung",
+    );
+  }, [notify, patch, sendCommand]);
 
   const resetFilterMaintenance = useCallback(() => {
-    setSystem((prev) => ({
+    patch((prev) => ({
       ...prev,
       filterHealth: 100,
       filterWarning: false,
@@ -227,7 +250,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     }));
     warnRef.current = { ...warnRef.current, filter: false };
     notify("Media filter diganti — kesehatan filter direset 100%");
-  }, [notify]);
+  }, [notify, patch]);
 
   const value = useMemo<AppStore>(() => {
     const unreadCount = notifications.filter((n) => n.unread).length;
@@ -248,6 +271,12 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       filterHealth: system.filterHealth,
       filterWarning: system.filterWarning,
       leakWarning: system.leakWarning,
+      link,
+      deviceOnline: system.deviceOnline,
+      pressureCalibrated: system.pressureCalibrated,
+      phCalibrated: system.phCalibrated,
+      firmware: system.firmware,
+      sendCommand,
       addLog,
       markAllRead,
       markRead,
@@ -266,6 +295,8 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     replacementLogs,
     language,
     system,
+    link,
+    sendCommand,
     addLog,
     markAllRead,
     markRead,

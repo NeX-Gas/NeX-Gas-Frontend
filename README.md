@@ -1,5 +1,31 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Integrasi alat (MQTT → backend → dashboard)
+
+Data alat masuk lewat satu pintu: `src/lib/use-device.ts`.
+
+- `NEXT_PUBLIC_DEVICE_WS_URL` kosong → dashboard jalan dengan **simulator lokal**
+  (`computeNext()` di `src/lib/system.ts`). Tidak ada data palsu yang
+  dikirim ke alat.
+- Diisi (mis. `wss://api.nex-gas.id/ws`) → dashboard membaca data asli dari
+  backend. Backend hanya perlu meneruskan pesan MQTT sebagai JSON:
+
+```json
+{ "type": "telemetry", "payload": { "...": "isi nexgas/<id>/telemetry" } }
+{ "type": "state",     "payload": { "...": "isi nexgas/<id>/state" } }
+{ "type": "event",     "payload": { "...": "isi nexgas/<id>/event" } }
+{ "type": "status",    "payload": "online" }
+```
+
+Perintah dari dashboard (`mode`, `valve`, `tare`, `cal_pressure_point`,
+`cal_mq`, `cal_ph`) dikirim sebagai
+`{"type":"command","payload":{...}}` pada WebSocket yang sama, atau
+`POST {NEXT_PUBLIC_API_URL}/commands` sebagai fallback.
+
+Salin `.env.example` menjadi `.env.local` lalu isi URL-nya. Kontrak payload
+mengikuti `buildTelemetryJson()` / `buildStateJson()` di repo
+`NeX-Gas-Firmware`, dan tipe TypeScript-nya ada di `src/lib/types.ts`.
+
 ## Getting Started
 
 First, run the development server:

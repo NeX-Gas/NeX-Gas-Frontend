@@ -14,9 +14,14 @@ export const THRESHOLDS = {
   humidityMax: 80,
 } as const;
 
+/** Nilai pengganti saat firmware mengirim -1 (sensor tidak tersedia). */
+export const SENSOR_UNAVAILABLE = -1;
+
 export const initialSystem: SystemState = {
   telemetry: {
-    h2sBefore: 46,
+    ts: 0,
+    uptimeMs: 0,
+    h2sBefore: SENSOR_UNAVAILABLE,
     h2sAfter: 3.2,
     ch4: 68,
     leak: 30,
@@ -24,22 +29,41 @@ export const initialSystem: SystemState = {
     pressureCollector: 0.85,
     temperature: 33.4,
     humidity: 91,
+    gasLineTemperature: 32.1,
+    gasLineHumidity: 88,
+    ph: 6.8,
     flow: 0,
+    gasSinceStartL: 12.5,
+    sensorsReady: true,
+    rssi: -54,
   },
   valveOpen: false,
   valveMode: "auto",
   filterHealth: 72,
   filterWarning: false,
   leakWarning: false,
+  pressureCalibrated: true,
+  phCalibrated: false,
+  buffered: 0,
+  firmware: "1.0.0",
+  deviceId: "nexgas-001",
+  deviceOnline: true,
+  lastSeen: null,
 };
 
 const clamp = (v: number, min: number, max: number) =>
   Math.min(max, Math.max(min, v));
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
 
+/**
+ * Simulator lokal. Dipakai hanya kalau dashboard tidak tersambung ke backend
+ * (env `NEXT_PUBLIC_DEVICE_WS_URL` kosong) atau saat demo tanpa alat.
+ */
 export function computeNext(prev: SystemState): SystemState {
   const t: Telemetry = { ...prev.telemetry };
 
+  t.ts = Math.floor(Date.now() / 1000);
+  t.uptimeMs = prev.telemetry.uptimeMs + 2500;
   t.h2sBefore = clamp(t.h2sBefore + rand(-1.8, 1.8), 20, 95);
   t.h2sAfter = clamp(
     t.h2sAfter + rand(-0.4, 0.5) + (prev.filterHealth < 40 ? 0.25 : 0.03),
@@ -50,6 +74,13 @@ export function computeNext(prev: SystemState): SystemState {
   t.leak = clamp(t.leak + rand(-30, 32), 0, 1500);
   t.temperature = clamp(t.temperature + rand(-0.3, 0.3), 26, 40);
   t.humidity = clamp(t.humidity + rand(-1.5, 1.5), 55, 99);
+  t.gasLineTemperature = clamp(
+    t.gasLineTemperature + rand(-0.3, 0.3),
+    24,
+    38,
+  );
+  t.gasLineHumidity = clamp(t.gasLineHumidity + rand(-1.5, 1.5), 50, 99);
+  t.ph = clamp(t.ph + rand(-0.05, 0.05), 6.2, 7.6);
   t.pressureCollector = clamp(t.pressureCollector - rand(0.004, 0.018), 0, 3);
 
   let valveOpen = prev.valveOpen;
@@ -77,11 +108,14 @@ export function computeNext(prev: SystemState): SystemState {
   if (valveOpen) {
     t.pressureDigester = clamp(t.pressureDigester - rand(0.03, 0.06), 0, 3);
     t.pressureCollector = clamp(t.pressureCollector + rand(0.02, 0.045), 0, 3);
-    t.flow = rand(12, 20);
+    // Satuan dashboard: L/jam (firmware mengirim L/menit, adapter mengalikan 60).
+    t.flow = rand(42, 72);
   } else {
     t.pressureDigester = clamp(t.pressureDigester + rand(0.02, 0.05), 0, 3);
-    t.flow = rand(0, 0.4);
+    t.flow = rand(0, 1.2);
   }
+
+  t.gasSinceStartL = t.gasSinceStartL + t.flow * (2.5 / 3600);
 
   const filterHealth = clamp(
     prev.filterHealth - (t.h2sAfter > THRESHOLDS.h2sWarn ? 0.6 : 0.08),
@@ -96,6 +130,8 @@ export function computeNext(prev: SystemState): SystemState {
     filterHealth,
     filterWarning: t.h2sAfter >= THRESHOLDS.h2sWarn,
     leakWarning: t.leak >= THRESHOLDS.leakWarn,
+    deviceOnline: true,
+    lastSeen: Date.now(),
   };
 }
 
