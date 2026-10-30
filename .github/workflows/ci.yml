@@ -32,6 +32,11 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      # LayoutProps/PageProps dibuat oleh Next saat type generation,
+      # jadi harus dijalankan sebelum `tsc`.
+      - name: Generate route types
+        run: npx next typegen
+
       - name: Typecheck
         run: npx tsc --noEmit
 
