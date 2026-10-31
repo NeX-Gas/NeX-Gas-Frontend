@@ -53,7 +53,7 @@ export const initialSystem: SystemState = {
   buffered: 0,
   firmware: "1.0.0",
   deviceId: "nexgas-001",
-  deviceOnline: true,
+  deviceOnline: false,
   lastSeen: null,
 };
 

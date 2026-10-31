@@ -127,6 +127,8 @@ export type AppliedMessage = {
   event?: FirmwareEvent;
 };
 
+export const STALE_AFTER_MS = 20_000;
+
 export function applyMessage(
   prev: SystemState,
   message: DeviceMessage,
@@ -140,6 +142,11 @@ export function applyMessage(
       const leakWarning =
         isSensorValue(telemetry.leak) &&
         telemetry.leak >= THRESHOLDS.leakWarn;
+      const teleTsMs =
+        typeof telemetry.ts === "number" && telemetry.ts > 0
+          ? telemetry.ts * 1000
+          : Date.now();
+      const isFresh = Date.now() - teleTsMs <= STALE_AFTER_MS;
       return {
         state: {
           ...prev,
@@ -147,8 +154,8 @@ export function applyMessage(
           telemetry,
           filterWarning,
           leakWarning,
-          deviceOnline: true,
-          lastSeen: Date.now(),
+          deviceOnline: isFresh,
+          lastSeen: teleTsMs,
         },
       };
     }

@@ -6,7 +6,7 @@ import type {
 } from "./types";
 
 export const digester = {
-  name: "Digester Aktif",
+  name: "Unit Digester",
   unit: "Unit #01 • Kandang Sapi Barat",
   online: true,
   temperature: 34,

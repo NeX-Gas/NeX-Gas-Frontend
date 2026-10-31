@@ -204,15 +204,17 @@ export function useDevice(
     });
   }, [hydrate]);
 
-  // ---- watchdog: tandai alat offline kalau data berhenti ----
+  // ---- watchdog: tandai alat offline kalau data berhenti atau belum pernah ada data ----
   useEffect(() => {
     if (isDemoMode) return;
     const id = setInterval(() => {
-      const { lastSeen } = stateRef.current;
-      if (lastSeen && Date.now() - lastSeen > STALE_AFTER_MS) {
-        setState((prev) =>
-          prev.deviceOnline ? { ...prev, deviceOnline: false } : prev,
-        );
+      const { lastSeen, deviceOnline } = stateRef.current;
+      if (deviceOnline) {
+        if (!lastSeen || Date.now() - lastSeen > STALE_AFTER_MS) {
+          setState((prev) =>
+            prev.deviceOnline ? { ...prev, deviceOnline: false } : prev,
+          );
+        }
       }
     }, WATCHDOG_TICK_MS);
     return () => clearInterval(id);

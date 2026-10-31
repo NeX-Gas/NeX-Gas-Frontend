@@ -317,12 +317,13 @@ export async function fetchSnapshot(): Promise<BackendSnapshot> {
     apiFetch(`/api/status${deviceQuery}`).catch(() => null),
   ]);
 
-  const statusData = status?.data as { status?: string } | undefined;
+  const rawStatus = (status as any)?.status ?? (status?.data as any)?.status;
+  const online = typeof rawStatus === "string" ? rawStatus === "online" : null;
 
   return {
     telemetry: (telemetry?.data as Record<string, unknown> | undefined) ?? null,
     state: (state?.data as Record<string, unknown> | undefined) ?? null,
-    online: statusData?.status ? statusData.status === "online" : null,
+    online,
   };
 }
 
