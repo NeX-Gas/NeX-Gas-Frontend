@@ -30,7 +30,7 @@ import {
 } from "@/components/ui";
 import { useAppStore } from "@/components/app-store";
 import { digester } from "@/lib/mock";
-import { fmtValue } from "@/lib/format";
+import { fmtValue, hasValue } from "@/lib/format";
 import { BURN_RATE_LPH, h2sTone, THRESHOLDS } from "@/lib/system";
 import { cn } from "@/lib/cn";
 
@@ -63,10 +63,15 @@ function TopStatus({ className }: { className?: string }) {
         </div>
         <p className="truncate text-sm text-ink-2">
           {lastSeen
-            ? `Data terakhir ${new Date(lastSeen).toLocaleTimeString("id-ID", {
+            ? `Data terakhir diterima: ${new Date(lastSeen).toLocaleTimeString("id-ID", {
                 hour: "2-digit",
                 minute: "2-digit",
-              })}`
+                second: "2-digit",
+              })} WIB (${new Date(lastSeen).toLocaleDateString("id-ID", {
+                day: "2-digit",
+                month: "short",
+                year: "numeric",
+              })})`
             : "Menunggu data alat"}
         </p>
       </div>
@@ -84,14 +89,24 @@ function TopStatus({ className }: { className?: string }) {
 
 function Telemetry({ className }: { className?: string }) {
   const { telemetry } = useAppStore();
+  const hasCollector = hasValue(telemetry.pressureCollector);
+  const hasDigester = hasValue(telemetry.pressureDigester);
   // Persentase dari tekanan penampung terhadap ambang penuh (2.0 kPa).
-  const percent = Math.round(
-    Math.min(100, (Math.max(0, telemetry.pressureCollector) / THRESHOLDS.collectorFullAt) * 100),
-  );
-  const ready = telemetry.pressureDigester >= THRESHOLDS.valveOpenAt;
-  const tone = h2sTone(telemetry.h2sAfter);
-  const h2sLabel =
-    tone === "good"
+  const percent = hasCollector
+    ? Math.round(
+        Math.min(
+          100,
+          (Math.max(0, telemetry.pressureCollector) / THRESHOLDS.collectorFullAt) * 100,
+        ),
+      )
+    : 0;
+  const ready =
+    hasDigester && telemetry.pressureDigester >= THRESHOLDS.valveOpenAt;
+  const hasH2s = hasValue(telemetry.h2sAfter);
+  const tone = hasH2s ? h2sTone(telemetry.h2sAfter) : "neutral";
+  const h2sLabel = !hasH2s
+    ? "Status H2S: Menunggu data"
+    : tone === "good"
       ? "Status H2S: AMAN"
       : tone === "warn"
         ? "Status H2S: WASPADA"
@@ -103,15 +118,23 @@ function Telemetry({ className }: { className?: string }) {
           <Gauge className="mb-1 size-5 text-brand" />
           <div className="flex items-start justify-center">
             <span className="text-[44px] leading-[52px] font-bold tracking-[-0.02em] text-ink">
-              {percent}
+              {hasCollector ? percent : "—"}
             </span>
-            <span className="mt-1 text-lg font-bold text-ink-2">%</span>
+            {hasCollector && <span className="mt-1 text-lg font-bold text-ink-2">%</span>}
           </div>
           <span className="text-[15px] font-bold text-brand">
-            {ready ? "Siap Pakai" : "Menunggu"}
+            {!hasCollector && !hasDigester
+              ? "Menunggu Data"
+              : ready
+                ? "Siap Pakai"
+                : "Menunggu"}
           </span>
           <span className="mt-1 text-xs text-ink-2">
-            {ready ? "Tekanan Gas Cukup" : "Tekanan Belum Cukup"}
+            {!hasCollector && !hasDigester
+              ? "Tekanan Belum Terbaca"
+              : ready
+                ? "Tekanan Gas Cukup"
+                : "Tekanan Belum Cukup"}
           </span>
         </div>
       </RadialGauge>
@@ -129,13 +152,21 @@ function Telemetry({ className }: { className?: string }) {
       <div
         className={cn(
           "inline-flex items-center gap-2 rounded-full px-4 py-2",
-          tone === "good" ? "bg-info-100" : "bg-danger-200",
+          tone === "good"
+            ? "bg-info-100"
+            : tone === "neutral"
+              ? "bg-slate-100"
+              : "bg-danger-200",
         )}
       >
         <span
           className={cn(
             "grid size-5 place-items-center rounded-full text-white",
-            tone === "good" ? "bg-brand" : "bg-danger",
+            tone === "good"
+              ? "bg-brand"
+              : tone === "neutral"
+                ? "bg-muted"
+                : "bg-danger",
           )}
         >
           {tone === "good" ? (
@@ -193,29 +224,51 @@ function SensorCard({
 
 function Sensors({ className }: { className?: string }) {
   const { telemetry, phCalibrated } = useAppStore();
+  const hasTemp = hasValue(telemetry.temperature);
+  const hasHum = hasValue(telemetry.humidity);
+  const hasGasTemp = hasValue(telemetry.gasLineTemperature);
+  const hasGasHum = hasValue(telemetry.gasLineHumidity);
+  const hasPh =
+    hasValue(telemetry.ph) &&
+    phCalibrated &&
+    telemetry.ph >= 0 &&
+    telemetry.ph <= 14;
+
   const tempOptimal =
+    hasTemp &&
     telemetry.temperature >= THRESHOLDS.tempMin &&
     telemetry.temperature <= THRESHOLDS.tempMax;
-  const humidityOk = telemetry.humidity <= THRESHOLDS.humidityMax;
-  const gasLineOk = telemetry.gasLineHumidity <= THRESHOLDS.humidityMax;
-  const phValue = fmtValue(telemetry.ph, 1);
+  const humidityOk = hasHum && telemetry.humidity <= THRESHOLDS.humidityMax;
+  const gasLineOk = hasGasHum && telemetry.gasLineHumidity <= THRESHOLDS.humidityMax;
+
+  const tempStatus = !hasTemp ? "Sensor belum ada" : tempOptimal ? "Optimal" : "Di luar rentang";
+  const tempTone: "good" | "warn" | "neutral" | "danger" = !hasTemp ? "neutral" : tempOptimal ? "good" : "warn";
+
+  const humStatus = !hasHum ? "Sensor belum ada" : humidityOk ? "Kering" : "Lembap";
+  const humTone: "good" | "warn" | "neutral" | "danger" = !hasHum ? "neutral" : humidityOk ? "good" : "warn";
+
+  const gasTempStatus = !hasGasTemp ? "Sensor belum ada" : "Normal";
+  const gasTempTone: "good" | "warn" | "neutral" | "danger" = !hasGasTemp ? "neutral" : "good";
+
+  const gasHumStatus = !hasGasHum ? "Sensor belum ada" : gasLineOk ? "Kering" : "Lembap";
+  const gasHumTone: "good" | "warn" | "neutral" | "danger" = !hasGasHum ? "neutral" : gasLineOk ? "good" : "warn";
+
+  const phValue = hasPh ? fmtValue(telemetry.ph, 1) : "—";
   const ph = telemetry.ph;
-  const phStatus =
-    phValue === "—"
-      ? "Sensor belum ada"
-      : ph < 6.5
-        ? "Terlalu asam"
-        : ph > 7.5
-          ? "Terlalu basa"
-          : phCalibrated
-            ? "Stabil"
-            : "Belum dikalibrasi";
-  const phTone =
-    phValue === "—" || !phCalibrated
+  const phStatus = !hasPh
+    ? "Sensor belum dipasang"
+    : ph < 6.5
+      ? "Terlalu asam"
+      : ph > 7.5
+        ? "Terlalu basa"
+        : phCalibrated
+          ? "Stabil"
+          : "Belum dikalibrasi";
+  const phTone: "good" | "warn" | "neutral" | "danger" = !hasPh
+    ? "neutral"
+    : !phCalibrated || ph < 6.5 || ph > 7.5
       ? "warn"
-      : ph < 6.5 || ph > 7.5
-        ? "warn"
-        : "good";
+      : "good";
 
   return (
     <div className={cn("grid grid-cols-2 gap-4 lg:gap-6", className)}>
@@ -224,36 +277,36 @@ function Sensors({ className }: { className?: string }) {
         icon={<Thermometer className="size-4" />}
         value={fmtValue(telemetry.temperature, 1)}
         unit="°C"
-        status={tempOptimal ? "Optimal" : "Di luar rentang"}
-        hint="Mesofilik ideal 28° - 38°C"
-        tone={tempOptimal ? "good" : "warn"}
+        status={tempStatus}
+        hint={hasTemp ? "Mesofilik ideal 28° - 38°C" : "DHT22 #1 belum terhubung"}
+        tone={tempTone}
       />
       <SensorCard
         label="Kelembapan Digester"
         icon={<Droplets className="size-4" />}
         value={fmtValue(telemetry.humidity, 0)}
         unit="%"
-        status={humidityOk ? "Kering" : "Lembap"}
-        hint="DHT22 #1 headspace"
-        tone={humidityOk ? "good" : "warn"}
+        status={humStatus}
+        hint={hasHum ? "DHT22 #1 headspace" : "DHT22 #1 belum terhubung"}
+        tone={humTone}
       />
       <SensorCard
         label="Suhu Jalur Gas"
         icon={<Thermometer className="size-4" />}
         value={fmtValue(telemetry.gasLineTemperature, 1)}
         unit="°C"
-        status={gasLineOk ? "Normal" : "Periksa silika"}
-        hint="DHT22 #2 setelah silika gel"
-        tone="good"
+        status={gasTempStatus}
+        hint={hasGasTemp ? "DHT22 #2 setelah silika gel" : "DHT22 #2 belum terhubung"}
+        tone={gasTempTone}
       />
       <SensorCard
         label="Kelembapan Jalur Gas"
         icon={<Droplets className="size-4" />}
         value={fmtValue(telemetry.gasLineHumidity, 0)}
         unit="%"
-        status={gasLineOk ? "Kering" : "Lembap"}
-        hint={`Ambang < ${THRESHOLDS.humidityMax}%`}
-        tone={gasLineOk ? "good" : "warn"}
+        status={gasHumStatus}
+        hint={hasGasHum ? `Ambang < ${THRESHOLDS.humidityMax}%` : "DHT22 #2 belum terhubung"}
+        tone={gasHumTone}
       />
       <SensorCard
         label="Tingkat pH"
@@ -262,9 +315,11 @@ function Sensors({ className }: { className?: string }) {
         unit="pH"
         status={phStatus}
         hint={
-          phCalibrated
-            ? "Rentang ideal 6.5 - 7.5"
-            : "Kalibrasi 2 titik di Pengaturan"
+          !hasPh
+            ? "Sensor pH belum dipasang pada alat"
+            : phCalibrated
+              ? "Rentang ideal 6.5 - 7.5"
+              : "Kalibrasi 2 titik di Pengaturan"
         }
         tone={phTone}
       />
@@ -274,9 +329,10 @@ function Sensors({ className }: { className?: string }) {
 
 function BurnCard() {
   const { notify, telemetry } = useAppStore();
-  const litres = Math.max(0, telemetry.gasSinceStartL);
+  const hasGas = hasValue(telemetry.gasSinceStartL);
+  const litres = hasGas ? Math.max(0, telemetry.gasSinceStartL) : 0;
   const hours = litres / BURN_RATE_LPH;
-  const estimate = `${hours.toFixed(1)} jam api nyala`;
+  const estimate = hasGas ? `${hours.toFixed(1)} jam api nyala` : "Menunggu data flow";
   return (
     <Card className="flex items-center gap-3 bg-info-200 p-4">
       <span className="grid size-12 shrink-0 place-items-center rounded-lg bg-surface text-brand">
@@ -286,13 +342,14 @@ function BurnCard() {
         <SectionLabel>Estimasi Penggunaan</SectionLabel>
         <p className="mt-0.5 text-lg font-semibold text-ink">{estimate}</p>
         <p className="text-xs text-ink-2">
-          Dari {litres.toFixed(1)} L gas sejak alat hidup · asumsi{" "}
-          {BURN_RATE_LPH} L/jam
+          {hasGas
+            ? `Dari ${litres.toFixed(1)} L gas sejak alat hidup · asumsi ${BURN_RATE_LPH} L/jam`
+            : "Menunggu data volume gas dari alat"}
         </p>
       </div>
       <button
         type="button"
-        onClick={() => notify("Pemeriksaan katup gas dimulai")}
+        onClick={() => notify(hasGas ? "Pemeriksaan katup gas dimulai" : "Data gas belum tersedia")}
         aria-label="Cek katup"
         className="grid size-12 shrink-0 place-items-center rounded-xl bg-surface text-ink card-shadow hover:bg-info-50"
       >

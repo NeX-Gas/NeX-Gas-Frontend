@@ -83,17 +83,31 @@ export function GasMonitor({ className }: { className?: string }) {
       ? Math.max(0, Math.min(100, Math.round((1 - h2sAfter / h2sBefore) * 100)))
       : 0;
   const beforeAvailable = hasValue(h2sBefore);
+  const afterAvailable = hasValue(h2sAfter);
+  const ch4Available = hasValue(ch4);
+  const leakAvailable = hasValue(leak);
   const afterTone = h2sTone(h2sAfter);
-  const overall: Tone = leakWarning
-    ? "danger"
-    : filterWarning
-      ? "warn"
-      : "good";
-  const overallText = leakWarning
-    ? "Bahaya"
-    : filterWarning
-      ? "Perlu Perhatian"
-      : "Aman";
+
+  const hasAnyGas = afterAvailable || ch4Available || leakAvailable;
+  const canEvaluateSafety = afterAvailable && ch4Available;
+  const overall: Tone = !hasAnyGas
+    ? "neutral"
+    : leakWarning
+      ? "danger"
+      : filterWarning
+        ? "warn"
+        : !canEvaluateSafety
+          ? "neutral"
+          : "good";
+  const overallText = !hasAnyGas
+    ? "Menunggu Data"
+    : leakWarning
+      ? "Bahaya"
+      : filterWarning
+        ? "Perlu Perhatian"
+        : !canEvaluateSafety
+          ? "Data Belum Lengkap"
+          : "Aman";
 
   return (
     <Card className={cn("flex flex-col gap-4 p-4", className)}>
@@ -126,33 +140,49 @@ export function GasMonitor({ className }: { className?: string }) {
           value={fmtValue(h2sAfter, 1)}
           unit="ppm"
           icon={Filter}
-          tone={afterTone}
+          tone={afterAvailable ? afterTone : "neutral"}
           status={
-            afterTone === "good"
-              ? "Di bawah ambang"
-              : afterTone === "warn"
-                ? "Mendekati ambang"
-                : "Tembus filter!"
+            !afterAvailable
+              ? "Menunggu data alat"
+              : afterTone === "good"
+                ? "Di bawah ambang"
+                : afterTone === "warn"
+                  ? "Mendekati ambang"
+                  : "Tembus filter!"
           }
-          hint={`Ambang aman < ${THRESHOLDS.h2sWarn} ppm`}
+          hint={
+            afterAvailable
+              ? `Ambang aman < ${THRESHOLDS.h2sWarn} ppm`
+              : "Sensor MQ-136 outlet"
+          }
         />
         <StatTile
           label="Metana (CH₄)"
           value={fmtValue(ch4, 0)}
           unit="%"
           icon={Flame}
-          tone="good"
-          status="Kandungan baik"
-          hint="Relatif • sensor MQ-4"
+          tone={ch4Available ? "good" : "neutral"}
+          status={ch4Available ? "Kandungan baik" : "Menunggu data alat"}
+          hint={ch4Available ? "Relatif • sensor MQ-4" : "Sensor MQ-4 #1 digestate"}
         />
         <StatTile
           label="Kebocoran Metana"
-          value={fmtValue(leak, 0)}
+          value={hasValue(leak) ? fmtValue(leak, 1) : "—"}
           unit="ppm"
           icon={Siren}
-          tone={leakWarning ? "danger" : "good"}
-          status={leakWarning ? "Bocor terdeteksi" : "Normal"}
-          hint="MQ-4 udara sekitar"
+          tone={!leakAvailable ? "neutral" : leakWarning ? "danger" : "neutral"}
+          status={
+            !leakAvailable
+              ? "Menunggu data alat"
+              : leakWarning
+                ? "Bocor terdeteksi"
+                : "Belum tervalidasi"
+          }
+          hint={
+            leakAvailable
+              ? "Pembacaan terakhir sebelum alat offline"
+              : "Sensor MQ-4 #2 ambient"
+          }
         />
       </div>
 
@@ -160,7 +190,7 @@ export function GasMonitor({ className }: { className?: string }) {
         <div className="flex items-center justify-between text-[13px] font-semibold text-ink-2">
           <span>Efektivitas Purifikasi H₂S</span>
           <span className="text-ink">
-            {beforeAvailable ? `${effectiveness}%` : "—"}
+            {beforeAvailable && afterAvailable ? `${effectiveness}%` : "—"}
           </span>
         </div>
         <ProgressBar
@@ -170,7 +200,7 @@ export function GasMonitor({ className }: { className?: string }) {
         />
         <div className="mt-1 flex items-center justify-between text-[13px] font-semibold text-ink-2">
           <span>Kesehatan Media Filter</span>
-          <span className="text-ink">{Math.round(filterHealth)}%</span>
+          <span className="text-ink">{filterHealth > 0 ? `${Math.round(filterHealth)}%` : "—"}</span>
         </div>
         <ProgressBar
           value={filterHealth}
@@ -332,10 +362,12 @@ export function PressureMonitor({ className }: { className?: string }) {
     pressureCalibrated,
   } = useAppStore();
   const { pressureDigester, pressureCollector } = telemetry;
+  const hasDigester = hasValue(pressureDigester);
+  const hasCollector = hasValue(pressureCollector);
 
-  const digesterPct = Math.max(0, Math.min(100, (pressureDigester / 2) * 100));
-  const collectorPct = Math.max(0, Math.min(100, (pressureCollector / 2) * 100));
-  const collectorFull = pressureCollector >= THRESHOLDS.collectorFullAt;
+  const digesterPct = hasDigester ? Math.max(0, Math.min(100, (pressureDigester / 2) * 100)) : 0;
+  const collectorPct = hasCollector ? Math.max(0, Math.min(100, (pressureCollector / 2) * 100)) : 0;
+  const collectorFull = hasCollector && pressureCollector >= THRESHOLDS.collectorFullAt;
 
   const status = leakWarning
     ? "Kebocoran terdeteksi — aliran dihentikan"
@@ -343,9 +375,11 @@ export function PressureMonitor({ className }: { className?: string }) {
       ? "Penampung penuh — valve tertutup"
       : valveOpen
         ? "Gas mengalir ke kantung penampung"
-        : pressureDigester >= THRESHOLDS.valveOpenAt
+        : hasDigester && pressureDigester >= THRESHOLDS.valveOpenAt
           ? "Tekanan siap — menunggu pembukaan valve"
-          : "Menunggu akumulasi tekanan gas";
+          : hasDigester
+            ? "Menunggu akumulasi tekanan gas"
+            : "Menunggu data tekanan alat";
 
   return (
     <Card className={cn("flex flex-col gap-4 p-4", className)}>

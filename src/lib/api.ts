@@ -303,6 +303,21 @@ const deviceQuery = `?deviceId=${encodeURIComponent(DEVICE_ID)}`;
 /** Ambil kondisi terakhir alat (dipakai saat halaman dibuka / WS reconnect). */
 export async function fetchSnapshot(): Promise<BackendSnapshot> {
   if (!isApiConfigured) return { telemetry: null, state: null, online: null };
+
+  try {
+    const res = await fetch(`${API_URL}/api/device/snapshot${deviceQuery}`);
+    if (res.ok) {
+      const body = (await res.json()) as Record<string, unknown>;
+      return {
+        telemetry: (body.telemetry as Record<string, unknown> | undefined) ?? null,
+        state: (body.state as Record<string, unknown> | undefined) ?? null,
+        online: typeof body.online === "boolean" ? body.online : null,
+      };
+    }
+  } catch {
+    // Abaikan error koneksi snapshot publik, coba jalur sesi
+  }
+
   if (!getSession()) return { telemetry: null, state: null, online: null };
 
   const [telemetry, state, status] = await Promise.all([
@@ -317,7 +332,11 @@ export async function fetchSnapshot(): Promise<BackendSnapshot> {
     apiFetch(`/api/status${deviceQuery}`).catch(() => null),
   ]);
 
-  const rawStatus = (status as any)?.status ?? (status?.data as any)?.status;
+  const statusObj = status as Record<string, unknown> | null;
+  const statusData = statusObj?.data as Record<string, unknown> | undefined;
+  const rawStatus =
+    (typeof statusObj?.status === "string" ? statusObj.status : undefined) ??
+    (typeof statusData?.status === "string" ? statusData.status : undefined);
   const online = typeof rawStatus === "string" ? rawStatus === "online" : null;
 
   return {

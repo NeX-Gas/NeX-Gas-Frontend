@@ -7,6 +7,7 @@ import {
   isDemoMode,
   messagesFromSnapshot,
   parseBackendMessage,
+  STALE_AFTER_MS,
   type DeviceMessage,
 } from "@/lib/device";
 import {
@@ -29,8 +30,6 @@ import type {
 const DEMO_TICK_MS = 2500;
 const RECONNECT_BASE_MS = 1000;
 const RECONNECT_MAX_MS = 15_000;
-/** Alat dianggap offline kalau tidak ada data selama ini. */
-const STALE_AFTER_MS = 20_000;
 const WATCHDOG_TICK_MS = 5_000;
 /** Gateway backend mem-ping tiap 30s; klien kirim ping supaya koneksi tidak diputus. */
 const PING_INTERVAL_MS = 25_000;
@@ -93,7 +92,7 @@ export function useDevice(
   /** Isi state dari REST; dipakai saat halaman dibuka dan tiap reconnect. */
   const hydrate = useCallback(
     async (isCancelled: () => boolean = () => false) => {
-      if (!isApiConfigured || !getSession()) return;
+      if (!isApiConfigured) return;
       try {
         const snapshot = await fetchSnapshot();
         if (isCancelled()) return;
@@ -129,6 +128,7 @@ export function useDevice(
 
     const connect = () => {
       if (cancelled) return;
+      void hydrate(() => cancelled);
       setLink((prev) => (prev === "live" ? prev : "connecting"));
 
       let socket: WebSocket;

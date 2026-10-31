@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/button";
 import { Card, ProgressBar, SectionLabel, StatusBadge } from "@/components/ui";
 import { useAppStore } from "@/components/app-store";
+import { fmtValue } from "@/lib/format";
 import type { FilterUnit, ScaleTick, Tone } from "@/lib/types";
 import { cn } from "@/lib/cn";
 
@@ -217,7 +218,8 @@ export default function PurifikasiPage() {
             ? "H₂S menembus filter"
             : "Media masih aktif",
           noteBody: filterWarning
-            ? `H₂S sesudah filter ${telemetry.h2sAfter.toFixed(
+            ? `H₂S sesudah filter ${fmtValue(
+                telemetry.h2sAfter,
                 1,
               )} ppm — ganti karbon aktif.`
             : "H₂S sesudah filter masih di bawah ambang aman.",
