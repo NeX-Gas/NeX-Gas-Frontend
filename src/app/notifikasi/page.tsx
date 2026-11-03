@@ -67,7 +67,7 @@ function DiagnosticBanner({ className }: { className?: string }) {
           <span className="text-[13px] font-semibold text-brand">Aktif</span>
         </div>
         <p className="mt-1 text-sm text-ink-2">
-          Semua 4 unit pemantau bio-digester tersambung via telemetry nirkabel.
+          Semua sensor pemantau bio-digester tersambung via telemetry nirkabel.
         </p>
       </div>
     </Card>
