@@ -5,6 +5,9 @@ const repoName = "NeX-Gas-Frontend";
 const basePath = isGithubPages ? `/${repoName}` : "";
 
 const nextConfig: NextConfig = {
+  experimental: {
+    agentUpgrade: "security",
+  },
   output: "export",
   trailingSlash: true,
   images: {
