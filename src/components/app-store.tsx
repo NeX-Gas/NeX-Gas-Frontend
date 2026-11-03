@@ -31,7 +31,7 @@ import {
   subscribeAuth,
   type AuthSession,
 } from "@/lib/api";
-import { DEVICE_WS_URL } from "@/lib/device";
+import { DEVICE_WS_URL, isSensorValue } from "@/lib/device";
 import type {
   AppNotification,
   DeviceCommand,
@@ -349,7 +349,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
   const openValve = useCallback(() => {
     const s = systemRef.current;
     if (s.valveMode !== "manual") return;
-    if (s.telemetry.leak >= THRESHOLDS.leakDanger) {
+    if (isSensorValue(s.telemetry.leak) && s.telemetry.leak >= THRESHOLDS.leakDanger) {
       notify("Ditolak: kebocoran metana terdeteksi — valve tetap tertutup");
       return;
     }
@@ -377,7 +377,6 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       ...prev,
       filterHealth: 100,
       filterWarning: false,
-      telemetry: { ...prev.telemetry, h2sAfter: 2.5 },
     }));
     warnRef.current = { ...warnRef.current, filter: false };
     notify("Media filter diganti — kesehatan filter direset 100%");

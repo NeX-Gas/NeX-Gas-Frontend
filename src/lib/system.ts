@@ -28,32 +28,32 @@ export const initialSystem: SystemState = {
     ts: 0,
     uptimeMs: 0,
     h2sBefore: SENSOR_UNAVAILABLE,
-    h2sAfter: 3.2,
-    ch4: 68,
-    leak: 30,
-    pressureDigester: 0.72,
-    pressureCollector: 0.85,
-    temperature: 33.4,
-    humidity: 91,
-    gasLineTemperature: 32.1,
-    gasLineHumidity: 88,
-    ph: 6.8,
-    flow: 0,
-    gasSinceStartL: 12.5,
-    sensorsReady: true,
-    rssi: -54,
+    h2sAfter: SENSOR_UNAVAILABLE,
+    ch4: SENSOR_UNAVAILABLE,
+    leak: SENSOR_UNAVAILABLE,
+    pressureDigester: SENSOR_UNAVAILABLE,
+    pressureCollector: SENSOR_UNAVAILABLE,
+    temperature: SENSOR_UNAVAILABLE,
+    humidity: SENSOR_UNAVAILABLE,
+    gasLineTemperature: SENSOR_UNAVAILABLE,
+    gasLineHumidity: SENSOR_UNAVAILABLE,
+    ph: SENSOR_UNAVAILABLE,
+    flow: SENSOR_UNAVAILABLE,
+    gasSinceStartL: SENSOR_UNAVAILABLE,
+    sensorsReady: false,
+    rssi: SENSOR_UNAVAILABLE,
   },
   valveOpen: false,
   valveMode: "auto",
-  filterHealth: 72,
+  filterHealth: 0,
   filterWarning: false,
   leakWarning: false,
-  pressureCalibrated: true,
+  pressureCalibrated: false,
   phCalibrated: false,
   buffered: 0,
   firmware: "1.0.0",
   deviceId: "nexgas-001",
-  deviceOnline: true,
+  deviceOnline: false,
   lastSeen: null,
 };
 
@@ -141,7 +141,10 @@ export function computeNext(prev: SystemState): SystemState {
   };
 }
 
-export function h2sTone(ppm: number): "good" | "warn" | "danger" {
+export function h2sTone(
+  ppm: number,
+): "good" | "warn" | "danger" | "neutral" {
+  if (ppm < 0 || !Number.isFinite(ppm)) return "neutral";
   if (ppm >= THRESHOLDS.h2sDanger) return "danger";
   if (ppm >= THRESHOLDS.h2sWarn) return "warn";
   return "good";
