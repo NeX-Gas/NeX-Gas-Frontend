@@ -13,7 +13,7 @@ export function ProductionChart({
   unit?: string;
   height?: number;
 }) {
-  const max = Math.max(...data.map((d) => d.value), target);
+  const max = Math.max(...data.map((d) => d.value), target, 1);
   const peak = Math.max(...data.map((d) => d.value));
   const targetBottom = (target / max) * height;
 

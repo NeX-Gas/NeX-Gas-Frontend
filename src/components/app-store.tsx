@@ -11,12 +11,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { CheckCircle2 } from "lucide-react";
-import {
-  dailyLogs,
-  filterUnits,
-  notifications as seedNotifications,
-  replacementLogs as seedReplacementLogs,
-} from "@/lib/mock";
+import { filterUnits } from "@/lib/mock";
 import { usePersistentState } from "@/lib/storage";
 import { THRESHOLDS } from "@/lib/system";
 import { useDevice } from "@/lib/use-device";
@@ -31,7 +26,7 @@ import {
   subscribeAuth,
   type AuthSession,
 } from "@/lib/api";
-import { DEVICE_WS_URL } from "@/lib/device";
+import { DEVICE_WS_URL, isSensorValue } from "@/lib/device";
 import type {
   AppNotification,
   DeviceCommand,
@@ -122,17 +117,18 @@ const eventSeverity: Record<string, NotificationSeverity> = {
 };
 
 export function AppStoreProvider({ children }: { children: React.ReactNode }) {
-  const [logs, setLogs] = usePersistentState<LogEntry[]>("logs", dailyLogs);
+  // Key v2: buang seed contoh yang tersimpan di localStorage versi lama.
+  const [logs, setLogs] = usePersistentState<LogEntry[]>("logs:v2", []);
   const [notifications, setNotifications] = usePersistentState<
     AppNotification[]
-  >("notifications", seedNotifications);
+  >("notifications:v2", []);
   const [filters, setFilters] = usePersistentState<FilterUnit[]>(
-    "filters",
+    "filters:v2",
     filterUnits,
   );
   const [replacementLogs, setReplacementLogs] = usePersistentState<
     ReplacementLog[]
-  >("replacementLogs", seedReplacementLogs);
+  >("replacementLogs:v2", []);
   const [language, setLanguageState] = usePersistentState<Language>(
     "language",
     "id",
@@ -142,7 +138,8 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
   const warnRef = useRef({ filter: false, leak: false });
 
   const notify = useCallback((message: string) => {
-    const id = Date.now();
+    // Dua toast bisa lahir di milidetik yang sama -> id harus unik.
+    const id = uid++;
     setToasts((prev) => [...prev, { id, message }]);
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     timeoutRef.current = setTimeout(() => {
@@ -349,7 +346,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
   const openValve = useCallback(() => {
     const s = systemRef.current;
     if (s.valveMode !== "manual") return;
-    if (s.telemetry.leak >= THRESHOLDS.leakDanger) {
+    if (isSensorValue(s.telemetry.leak) && s.telemetry.leak >= THRESHOLDS.leakDanger) {
       notify("Ditolak: kebocoran metana terdeteksi — valve tetap tertutup");
       return;
     }
@@ -377,7 +374,6 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       ...prev,
       filterHealth: 100,
       filterWarning: false,
-      telemetry: { ...prev.telemetry, h2sAfter: 2.5 },
     }));
     warnRef.current = { ...warnRef.current, filter: false };
     notify("Media filter diganti — kesehatan filter direset 100%");

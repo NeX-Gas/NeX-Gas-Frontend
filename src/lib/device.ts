@@ -104,21 +104,22 @@ export function normalizeState(
     buffered: num(src.buffered, prev.buffered),
     firmware: text(src.firmware, prev.firmware),
     telemetry: { ...prev.telemetry, sensorsReady },
-    deviceOnline: true,
-    lastSeen: Date.now(),
+    deviceOnline: prev.deviceOnline,
+    lastSeen: prev.lastSeen,
   };
 }
 
 /** Pesan yang diharapkan dari backend (MQTT bridge) lewat WebSocket. */
 export type DeviceMessage =
-  | { type: "telemetry"; payload: Record<string, unknown>; deviceId?: string }
-  | { type: "state"; payload: Record<string, unknown>; deviceId?: string }
-  | { type: "event"; payload: FirmwareEvent; deviceId?: string }
-  | { type: "status"; payload: "online" | "offline"; deviceId?: string }
+  | { type: "telemetry"; payload: Record<string, unknown>; deviceId?: string; receivedAt?: string }
+  | { type: "state"; payload: Record<string, unknown>; deviceId?: string; receivedAt?: string }
+  | { type: "event"; payload: FirmwareEvent; deviceId?: string; receivedAt?: string }
+  | { type: "status"; payload: "online" | "offline"; deviceId?: string; receivedAt?: string }
   | {
       type: "snapshot";
       payload: { state?: FirmwareState; telemetry?: unknown };
       deviceId?: string;
+      receivedAt?: string;
     };
 
 export type AppliedMessage = {
@@ -126,6 +127,13 @@ export type AppliedMessage = {
   /** event yang perlu ditampilkan sebagai notifikasi */
   event?: FirmwareEvent;
 };
+
+/**
+ * Firmware mengirim state setiap 30s (`STATE_INTERVAL_MS = 30000`).
+ * Watchdog memakai 60s (2x interval state) sebagai batas aman
+ * agar status Online tidak flapping saat jeda normal pengiriman data.
+ */
+export const STALE_AFTER_MS = 60_000;
 
 export function applyMessage(
   prev: SystemState,
@@ -140,6 +148,15 @@ export function applyMessage(
       const leakWarning =
         isSensorValue(telemetry.leak) &&
         telemetry.leak >= THRESHOLDS.leakWarn;
+
+      const receivedMs = message.receivedAt ? new Date(message.receivedAt).getTime() : NaN;
+      const teleTsMs = Number.isFinite(receivedMs) && receivedMs > 0
+        ? receivedMs
+        : typeof telemetry.ts === "number" && telemetry.ts > 0
+          ? telemetry.ts * 1000
+          : Date.now();
+      const isFresh = Date.now() - teleTsMs <= STALE_AFTER_MS;
+
       return {
         state: {
           ...prev,
@@ -147,15 +164,24 @@ export function applyMessage(
           telemetry,
           filterWarning,
           leakWarning,
-          deviceOnline: true,
-          lastSeen: Date.now(),
+          deviceOnline: isFresh ? true : prev.deviceOnline,
+          lastSeen: isFresh ? teleTsMs : (prev.lastSeen ?? teleTsMs),
         },
       };
     }
     case "state": {
       const next = normalizeState(message.payload, prev);
+      const receivedMs = message.receivedAt ? new Date(message.receivedAt).getTime() : NaN;
+      const stateTsMs = Number.isFinite(receivedMs) && receivedMs > 0 ? receivedMs : Date.now();
+      const isFresh = Date.now() - stateTsMs <= STALE_AFTER_MS;
+
       return {
-        state: message.deviceId ? { ...next, deviceId: message.deviceId } : next,
+        state: {
+          ...next,
+          ...(message.deviceId ? { deviceId: message.deviceId } : null),
+          deviceOnline: isFresh ? true : prev.deviceOnline,
+          lastSeen: isFresh ? stateTsMs : (prev.lastSeen ?? stateTsMs),
+        },
       };
     }
     case "snapshot": {
@@ -168,7 +194,18 @@ export function applyMessage(
         message.payload.telemetry,
         withId.telemetry,
       );
-      return { state: { ...withId, telemetry, lastSeen: Date.now() } };
+      const receivedMs = message.receivedAt ? new Date(message.receivedAt).getTime() : NaN;
+      const snapTsMs = Number.isFinite(receivedMs) && receivedMs > 0 ? receivedMs : Date.now();
+      const isFresh = Date.now() - snapTsMs <= STALE_AFTER_MS;
+
+      return {
+        state: {
+          ...withId,
+          telemetry,
+          deviceOnline: isFresh ? true : prev.deviceOnline,
+          lastSeen: isFresh ? snapTsMs : (prev.lastSeen ?? snapTsMs),
+        },
+      };
     }
     case "event": {
       return {
@@ -178,11 +215,24 @@ export function applyMessage(
     }
     case "status": {
       const online = message.payload === "online";
+      const receivedMs = message.receivedAt ? new Date(message.receivedAt).getTime() : NaN;
+      const statusTsMs = Number.isFinite(receivedMs) && receivedMs > 0 ? receivedMs : Date.now();
+      const isFresh = Date.now() - statusTsMs <= STALE_AFTER_MS;
+
+      if (!online) {
+        return {
+          state: {
+            ...prev,
+            deviceOnline: false,
+          },
+        };
+      }
+
       return {
         state: {
           ...prev,
-          deviceOnline: online,
-          lastSeen: online ? Date.now() : prev.lastSeen,
+          deviceOnline: isFresh,
+          lastSeen: isFresh ? statusTsMs : prev.lastSeen,
         },
       };
     }
@@ -221,7 +271,9 @@ function telemetryFromBackend(envelope: Record<string, unknown>): Record<string,
       humidity: nullToUnavailable(data.humidityPct ?? data.humidity),
       gasLineTemperature: nullToUnavailable(data.gasLineTemperatureC ?? data.gasLineTemperature),
       gasLineHumidity: nullToUnavailable(data.gasLineHumidityPct ?? data.gasLineHumidity),
-      ph: nullToUnavailable(data.ph),
+      ph: nullToUnavailable(
+        typeof data.ph === "number" && data.ph >= 0 && data.ph <= 14 ? data.ph : -1,
+      ),
       flow: nullToUnavailable(data.flowEstimateLpm ?? data.flow),
       gasSinceStartL: nullToUnavailable(data.gasSinceStartTotalL ?? data.gasSinceStartL),
       sensorsReady: typeof data.sensorsReady === "boolean" ? data.sensorsReady : undefined,
@@ -242,7 +294,9 @@ function telemetryFromBackend(envelope: Record<string, unknown>): Record<string,
     humidity: nullToUnavailable(source.humidity),
     gasLineTemperature: nullToUnavailable(source.gasLineTemperature),
     gasLineHumidity: nullToUnavailable(source.gasLineHumidity),
-    ph: nullToUnavailable(source.ph),
+    ph: nullToUnavailable(
+      typeof source.ph === "number" && source.ph >= 0 && source.ph <= 14 ? source.ph : -1,
+    ),
     flow: nullToUnavailable(source.flow),
     gasSinceStartL: nullToUnavailable(source.gasSinceStartL),
     sensorsReady: typeof source.sensorsReady === "boolean" ? source.sensorsReady : undefined,
@@ -343,21 +397,22 @@ export function parseBackendMessage(input: unknown): BackendIncoming | null {
   if (type === "pong" || type === "ping") return null;
 
   const deviceId = typeof envelope.deviceId === "string" ? envelope.deviceId : undefined;
+  const receivedAt = typeof envelope.receivedAt === "string" ? envelope.receivedAt : undefined;
 
   // Kompatibilitas bentuk lama { type, payload }.
   if ("payload" in envelope && !("data" in envelope) && !("frontend" in envelope)) {
-    return { message: envelope as unknown as DeviceMessage };
+    return { message: { ...(envelope as unknown as DeviceMessage), receivedAt } };
   }
 
   if (type === "telemetry") {
     return {
-      message: { type: "telemetry", payload: telemetryFromBackend(envelope), deviceId },
+      message: { type: "telemetry", payload: telemetryFromBackend(envelope), deviceId, receivedAt },
     };
   }
 
   if (type === "state") {
     const payload = stateFromBackend(envelope);
-    return payload ? { message: { type: "state", payload, deviceId } } : null;
+    return payload ? { message: { type: "state", payload, deviceId, receivedAt } } : null;
   }
 
   if (type === "status") {
@@ -367,7 +422,7 @@ export function parseBackendMessage(input: unknown): BackendIncoming | null {
     const status = typeof nested === "string" ? nested : typeof data === "string" ? data : undefined;
     if (!status) return null;
     return {
-      message: { type: "status", payload: status === "online" ? "online" : "offline", deviceId },
+      message: { type: "status", payload: status === "online" ? "online" : "offline", deviceId, receivedAt },
     };
   }
 
@@ -380,11 +435,11 @@ export function parseBackendMessage(input: unknown): BackendIncoming | null {
       uptimeMs: typeof data.uptimeMs === "number" ? data.uptimeMs : undefined,
     };
     const notification = notificationFromBackend(envelope.notification) ?? undefined;
-    return { message: { type: "event", payload: event, deviceId }, notification };
+    return { message: { type: "event", payload: event, deviceId, receivedAt }, notification };
   }
 
   if (type === "snapshot") {
-    return { message: envelope as unknown as DeviceMessage };
+    return { message: { ...(envelope as unknown as DeviceMessage), receivedAt } };
   }
 
   return null;
@@ -402,12 +457,21 @@ export function messagesFromSnapshot(snapshot: {
   const messages: DeviceMessage[] = [];
   if (snapshot.state) {
     const payload = stateFromBackend({ data: snapshot.state });
-    if (payload) messages.push({ type: "state", payload });
+    const receivedAt =
+      typeof snapshot.state.receivedAt === "string"
+        ? snapshot.state.receivedAt
+        : undefined;
+    if (payload) messages.push({ type: "state", payload, receivedAt });
   }
   if (snapshot.telemetry) {
+    const receivedAt =
+      typeof snapshot.telemetry.receivedAt === "string"
+        ? snapshot.telemetry.receivedAt
+        : undefined;
     messages.push({
       type: "telemetry",
       payload: telemetryFromBackend({ data: snapshot.telemetry }),
+      receivedAt,
     });
   }
   if (snapshot.online !== null) {
@@ -422,9 +486,13 @@ export function messagesFromSnapshot(snapshot: {
  * dipertahankan supaya .env lama tetap jalan.
  */
 export const DEVICE_WS_URL =
-  process.env.NEXT_PUBLIC_WS_URL ?? process.env.NEXT_PUBLIC_DEVICE_WS_URL ?? "";
+  process.env.NEXT_PUBLIC_WS_URL ??
+  process.env.NEXT_PUBLIC_DEVICE_WS_URL ??
+  "wss://backend-production-4135d719.up.railway.app/ws";
 
 /** Endpoint REST backend (aksi non-realtime). */
-export const DEVICE_API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
+export const DEVICE_API_URL =
+  process.env.NEXT_PUBLIC_API_URL ??
+  "https://backend-production-4135d719.up.railway.app";
 
 export const isDemoMode = DEVICE_WS_URL.length === 0;
