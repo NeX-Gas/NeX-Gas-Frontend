@@ -486,9 +486,13 @@ export function messagesFromSnapshot(snapshot: {
  * dipertahankan supaya .env lama tetap jalan.
  */
 export const DEVICE_WS_URL =
-  process.env.NEXT_PUBLIC_WS_URL ?? process.env.NEXT_PUBLIC_DEVICE_WS_URL ?? "";
+  process.env.NEXT_PUBLIC_WS_URL ??
+  process.env.NEXT_PUBLIC_DEVICE_WS_URL ??
+  "wss://backend-production-4135d719.up.railway.app/ws";
 
 /** Endpoint REST backend (aksi non-realtime). */
-export const DEVICE_API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
+export const DEVICE_API_URL =
+  process.env.NEXT_PUBLIC_API_URL ??
+  "https://backend-production-4135d719.up.railway.app";
 
 export const isDemoMode = DEVICE_WS_URL.length === 0;

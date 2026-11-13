@@ -13,7 +13,9 @@ import type { DeviceCommand } from "./types";
  *   dan `frontend` (bentuk siap pakai untuk dashboard).
  */
 
-export const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/+$/, "");
+export const API_URL = (
+  process.env.NEXT_PUBLIC_API_URL ?? "https://backend-production-4135d719.up.railway.app"
+).replace(/\/+$/, "");
 
 /** ID alat default; sama dengan `DEFAULT_DEVICE_ID` di backend. */
 export const DEVICE_ID = process.env.NEXT_PUBLIC_DEVICE_ID ?? "nexgas-001";
