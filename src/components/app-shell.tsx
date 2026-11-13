@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  AlertTriangle,
   ArrowLeft,
   Bell,
   PanelLeftClose,
@@ -267,6 +268,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     "sidebar-collapsed",
     false,
   );
+  const { link, deviceOnline, lastError } = useAppStore();
+  const showOffline = link === "live" && !deviceOnline;
 
   return (
     <div className="min-h-dvh bg-canvas">
@@ -279,6 +282,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       >
         <MobileHeader />
         <DesktopTopBar />
+        {showOffline ? (
+          <div className="mx-auto mt-3 flex max-w-md items-start gap-2 rounded-xl border border-danger-200 bg-danger-200/60 px-4 py-3 text-[13px] font-medium text-danger-800 lg:max-w-5xl">
+            <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+            <span>
+              Alat offline — menampilkan data terakhir yang diterima. Periksa
+              koneksi WiFi/MQTT alat.
+            </span>
+          </div>
+        ) : null}
+        {lastError ? (
+          <div className="mx-auto mt-2 max-w-md rounded-xl border border-danger-200 bg-danger-200/60 px-4 py-2 text-[12px] font-medium text-danger-800 lg:max-w-5xl">
+            {lastError}
+          </div>
+        ) : null}
         <main className="mx-auto w-full max-w-md px-4 pt-4 pb-28 lg:max-w-5xl lg:px-8 lg:pt-4 lg:pb-16">
           {children}
         </main>
