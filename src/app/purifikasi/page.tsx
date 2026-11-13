@@ -123,6 +123,7 @@ function FilterCard({
   className?: string;
 }) {
   const warn = unit.status.tone === "warn";
+  const saturated = unit.saturation;
   return (
     <Card className={cn("flex flex-col gap-4 p-4", className)}>
       <div className="flex items-start justify-between gap-4">
@@ -131,7 +132,7 @@ function FilterCard({
           <h3 className="mt-1 text-lg font-semibold text-ink">{unit.name}</h3>
           <p className="text-sm text-ink-2">{unit.subtitle}</p>
         </div>
-        <StatusBadge tone={warn ? "warn" : "good"}>
+        <StatusBadge tone={warn ? "warn" : saturated == null ? "info" : "good"}>
           {unit.status.text}
         </StatusBadge>
       </div>
@@ -142,21 +143,25 @@ function FilterCard({
         </span>
         <span className="flex items-baseline gap-1.5">
           <span className="text-[44px] leading-[44px] font-bold tracking-[-0.02em] text-ink">
-            {unit.saturation}
+            {saturated ?? "—"}
           </span>
-          <span className="text-base font-semibold text-ink-2">% Jenuh</span>
+          <span className="text-base font-semibold text-ink-2">
+            {saturated == null ? "" : "% Jenuh"}
+          </span>
         </span>
       </div>
 
-      <div>
-        <ProgressBar
-          value={unit.saturation}
-          tone={warn ? "warn" : "good"}
-          thresholds={unit.thresholds}
-          label={`${unit.saturation}%`}
-        />
-        <ScaleLabels scale={unit.scale} />
-      </div>
+      {saturated != null ? (
+        <div>
+          <ProgressBar
+            value={saturated}
+            tone={warn ? "warn" : "good"}
+            thresholds={unit.thresholds}
+            label={`${saturated}%`}
+          />
+          <ScaleLabels scale={unit.scale} />
+        </div>
+      ) : null}
 
       <NoteBox
         tone={unit.noteTone}
@@ -229,7 +234,7 @@ export default function PurifikasiPage() {
   );
 
   const mostSaturated = units.reduce(
-    (acc, f) => (f.saturation > acc.saturation ? f : acc),
+    (acc, f) => ((f.saturation ?? -1) > (acc.saturation ?? -1) ? f : acc),
     units[0],
   );
 
@@ -247,6 +252,7 @@ export default function PurifikasiPage() {
         <Button
           icon={Recycle}
           onClick={() => replaceFilter(mostSaturated.id)}
+          disabled={mostSaturated.saturation == null}
           className="lg:max-w-sm"
         >
           Tandai Filter Sudah Diganti

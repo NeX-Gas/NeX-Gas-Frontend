@@ -278,7 +278,7 @@ function Sensors({ className }: { className?: string }) {
         value={fmtValue(telemetry.temperature, 1)}
         unit="°C"
         status={tempStatus}
-        hint={hasTemp ? "Mesofilik ideal 28° - 38°C" : "DHT22 #1 belum terhubung"}
+        hint={hasTemp ? "Mesofilik ideal 28° - 38°C" : "Sensor suhu (DS18B20 / DHT22) belum terhubung"}
         tone={tempTone}
       />
       <SensorCard
@@ -287,7 +287,7 @@ function Sensors({ className }: { className?: string }) {
         value={fmtValue(telemetry.humidity, 0)}
         unit="%"
         status={humStatus}
-        hint={hasHum ? "DHT22 #1 headspace" : "DHT22 #1 belum terhubung"}
+        hint={hasHum ? "DHT22 #1 headspace" : hasTemp ? "Tidak tersedia pada probe DS18B20" : "Sensor belum terhubung"}
         tone={humTone}
       />
       <SensorCard
@@ -296,7 +296,7 @@ function Sensors({ className }: { className?: string }) {
         value={fmtValue(telemetry.gasLineTemperature, 1)}
         unit="°C"
         status={gasTempStatus}
-        hint={hasGasTemp ? "DHT22 #2 setelah silika gel" : "DHT22 #2 belum terhubung"}
+        hint={hasGasTemp ? "DHT22 #2 setelah silika gel" : "Sensor suhu jalur gas belum terhubung"}
         tone={gasTempTone}
       />
       <SensorCard
@@ -305,7 +305,7 @@ function Sensors({ className }: { className?: string }) {
         value={fmtValue(telemetry.gasLineHumidity, 0)}
         unit="%"
         status={gasHumStatus}
-        hint={hasGasHum ? `Ambang < ${THRESHOLDS.humidityMax}%` : "DHT22 #2 belum terhubung"}
+        hint={hasGasHum ? `Ambang < ${THRESHOLDS.humidityMax}%` : "Sensor kelembapan jalur gas belum terhubung"}
         tone={gasHumTone}
       />
       <SensorCard

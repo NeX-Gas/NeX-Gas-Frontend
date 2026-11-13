@@ -15,6 +15,7 @@ import {
 import { Button } from "@/components/button";
 import { Card, StatusBadge } from "@/components/ui";
 import { useAppStore } from "@/components/app-store";
+import { hasValue } from "@/lib/format";
 import type { AppNotification, NotificationSeverity } from "@/lib/types";
 import { cn } from "@/lib/cn";
 
@@ -56,18 +57,33 @@ const severity: Record<
 };
 
 function DiagnosticBanner({ className }: { className?: string }) {
+  const { telemetry, deviceOnline } = useAppStore();
+  const readings = [
+    telemetry.h2sAfter,
+    telemetry.ch4,
+    telemetry.leak,
+    telemetry.ph,
+    telemetry.temperature,
+    telemetry.humidity,
+    telemetry.pressureDigester,
+  ];
+  const active = readings.filter(hasValue).length;
+
   return (
     <Card className={cn("flex items-start gap-3 bg-info-200 p-4", className)}>
       <Activity className="mt-0.5 size-5 shrink-0 text-brand" />
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-3">
           <h3 className="text-[15px] font-semibold text-ink">
-            Pengecekan Rutin Sensor
+            Status Sensor Alat
           </h3>
-          <span className="text-[13px] font-semibold text-brand">Aktif</span>
+          <span className="text-[13px] font-semibold text-brand">
+            {deviceOnline ? "Online" : "Offline"}
+          </span>
         </div>
         <p className="mt-1 text-sm text-ink-2">
-          Semua 4 unit pemantau bio-digester tersambung via telemetry nirkabel.
+          {active} dari {readings.length} kanal sensor mengirim nilai. Kanal
+          tanpa nilai berarti belum terpasang, bukan nol.
         </p>
       </div>
     </Card>

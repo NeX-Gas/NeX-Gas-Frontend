@@ -176,13 +176,9 @@ export function GasMonitor({ className }: { className?: string }) {
               ? "Menunggu data alat"
               : leakWarning
                 ? "Bocor terdeteksi"
-                : "Belum tervalidasi"
+                : "Di bawah ambang"
           }
-          hint={
-            leakAvailable
-              ? "Pembacaan terakhir sebelum alat offline"
-              : "Sensor MQ-4 #2 ambient"
-          }
+          hint="Sensor MQ-4 #2 ambient"
         />
       </div>
 
@@ -473,7 +469,7 @@ export function FilterMaintenanceCard({ className }: { className?: string }) {
 
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between text-[13px] font-semibold text-ink-2">
-          <span>Sisa umur efektif</span>
+          <span>Estimasi sisa umur (45 hari)</span>
           <span className="text-ink">{remaining} hari</span>
         </div>
         <ProgressBar
