@@ -298,7 +298,7 @@ export function ValveControl({ className }: { className?: string }) {
       <div className="grid grid-cols-2 gap-2">
         <Button
           icon={Unlock}
-          disabled={valveMode !== "manual" || valveOpen || !canCommand}
+          disabled={valveMode !== "manual" || valveOpen}
           onClick={openValve}
         >
           Buka Valve
@@ -306,22 +306,21 @@ export function ValveControl({ className }: { className?: string }) {
         <Button
           variant="secondary"
           icon={Lock}
-          disabled={valveMode !== "manual" || !valveOpen || !canCommand}
+          disabled={valveMode !== "manual" || !valveOpen}
           onClick={closeValve}
         >
           Tutup Valve
         </Button>
       </div>
 
-      {!auth ? (
-        <p className="rounded-lg bg-info-50 p-3 text-[12px] font-semibold text-ink-2">
-          Tombol valve terkunci: login di Pengaturan → Koneksi Backend (role
-          operator/admin).
-        </p>
-      ) : valveMode !== "manual" ? (
+      {valveMode !== "manual" ? (
         <p className="rounded-lg bg-info-50 p-3 text-[12px] font-semibold text-ink-2">
           Mode Otomatis aktif — pilih Manual untuk membuka/menutup valve
           langsung.
+        </p>
+      ) : !canCommand ? (
+        <p className="rounded-lg bg-info-50 p-3 text-[12px] font-medium text-ink-2">
+          Alat offline atau belum login backend — tombol beroperasi dalam mode uji lokal.
         </p>
       ) : null}
 
