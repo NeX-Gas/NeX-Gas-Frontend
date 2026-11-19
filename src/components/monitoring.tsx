@@ -219,6 +219,7 @@ export function ValveControl({ className }: { className?: string }) {
     leakWarning,
     pressureCalibrated,
     canCommand,
+    auth,
   } = useAppStore();
   const delta = telemetry.pressureDigester - telemetry.pressureCollector;
   const modes: { key: ValveMode; label: string; icon: LucideIcon }[] = [
@@ -297,7 +298,7 @@ export function ValveControl({ className }: { className?: string }) {
       <div className="grid grid-cols-2 gap-2">
         <Button
           icon={Unlock}
-          disabled={valveMode !== "manual" || valveOpen}
+          disabled={valveMode !== "manual" || valveOpen || !canCommand}
           onClick={openValve}
         >
           Buka Valve
@@ -305,12 +306,24 @@ export function ValveControl({ className }: { className?: string }) {
         <Button
           variant="secondary"
           icon={Lock}
-          disabled={valveMode !== "manual" || !valveOpen}
+          disabled={valveMode !== "manual" || !valveOpen || !canCommand}
           onClick={closeValve}
         >
           Tutup Valve
         </Button>
       </div>
+
+      {!auth ? (
+        <p className="rounded-lg bg-info-50 p-3 text-[12px] font-semibold text-ink-2">
+          Tombol valve terkunci: login di Pengaturan → Koneksi Backend (role
+          operator/admin).
+        </p>
+      ) : valveMode !== "manual" ? (
+        <p className="rounded-lg bg-info-50 p-3 text-[12px] font-semibold text-ink-2">
+          Mode Otomatis aktif — pilih Manual untuk membuka/menutup valve
+          langsung.
+        </p>
+      ) : null}
 
       <div className="flex flex-col gap-1 rounded-lg bg-info-50 p-3 text-[12px] text-ink-2">
         <div className="flex items-center justify-between">
