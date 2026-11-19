@@ -102,17 +102,9 @@ function Telemetry({ className }: { className?: string }) {
     : 0;
   const ready =
     hasDigester && telemetry.pressureDigester >= THRESHOLDS.valveOpenAt;
-  const hasH2s = hasValue(telemetry.h2sAfter);
-  const tone = hasH2s ? h2sTone(telemetry.h2sAfter) : "neutral";
-  const h2sLabel = !hasH2s
-    ? "Status H2S: Menunggu data"
-    : tone === "good"
-      ? "Status H2S: AMAN"
-      : tone === "warn"
-        ? "Status H2S: WASPADA"
-        : "Status H2S: BAHAYA";
+
   return (
-    <Card className={cn("flex flex-col items-center gap-5 p-5", className)}>
+    <Card className={cn("flex flex-col items-center justify-center gap-6 p-6", className)}>
       <RadialGauge value={percent}>
         <div className="flex flex-col items-center">
           <Gauge className="mb-1 size-5 text-brand" />
@@ -147,37 +139,6 @@ function Telemetry({ className }: { className?: string }) {
           </span>
         </div>
         <ProgressBar value={percent} className="mt-2 h-2.5" />
-      </div>
-
-      <div
-        className={cn(
-          "inline-flex items-center gap-2 rounded-full px-4 py-2",
-          tone === "good"
-            ? "bg-info-100"
-            : tone === "neutral"
-              ? "bg-slate-100"
-              : "bg-danger-200",
-        )}
-      >
-        <span
-          className={cn(
-            "grid size-5 place-items-center rounded-full text-white",
-            tone === "good"
-              ? "bg-brand"
-              : tone === "neutral"
-                ? "bg-muted"
-                : "bg-danger",
-          )}
-        >
-          {tone === "good" ? (
-            <Check className="size-3" strokeWidth={3} />
-          ) : (
-            <Wind className="size-3" strokeWidth={3} />
-          )}
-        </span>
-        <span className="text-[15px] font-semibold text-ink">
-          {h2sLabel} ({fmtValue(telemetry.h2sAfter, 1)} ppm)
-        </span>
       </div>
     </Card>
   );
@@ -233,6 +194,8 @@ function Sensors({ className }: { className?: string }) {
     phCalibrated &&
     telemetry.ph >= 0 &&
     telemetry.ph <= 14;
+  const hasH2s = hasValue(telemetry.h2sAfter);
+  const tone = hasH2s ? h2sTone(telemetry.h2sAfter) : "neutral";
 
   const tempOptimal =
     hasTemp &&
@@ -269,6 +232,14 @@ function Sensors({ className }: { className?: string }) {
     : !phCalibrated || ph < 6.5 || ph > 7.5
       ? "warn"
       : "good";
+
+  const h2sStatus = !hasH2s
+    ? "Sensor belum ada"
+    : tone === "good"
+      ? "Aman"
+      : tone === "warn"
+        ? "Waspada"
+        : "Bahaya";
 
   return (
     <div className={cn("grid grid-cols-2 gap-4 lg:gap-6", className)}>
@@ -322,6 +293,19 @@ function Sensors({ className }: { className?: string }) {
               : "Kalibrasi 2 titik di Pengaturan"
         }
         tone={phTone}
+      />
+      <SensorCard
+        label="Kadar H₂S"
+        icon={<Wind className="size-4" />}
+        value={fmtValue(telemetry.h2sAfter, 1)}
+        unit="ppm"
+        status={h2sStatus}
+        hint={
+          hasH2s
+            ? `MQ-136 outlet · ambang < ${THRESHOLDS.h2sWarn} ppm`
+            : "Sensor MQ-136 belum terhubung"
+        }
+        tone={tone}
       />
     </div>
   );
@@ -395,11 +379,11 @@ export default function DashboardPage() {
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:gap-6">
       <TopStatus className="lg:col-span-12" />
-      <div className="flex flex-col gap-4 lg:col-span-7 lg:gap-6">
+      <Telemetry className="lg:col-span-7" />
+      <div className="flex flex-col gap-4 lg:col-span-5 lg:gap-6">
         <Sensors />
         <BurnCard />
       </div>
-      <Telemetry className="lg:col-span-5" />
 
       <GasMonitor className="lg:col-span-7" />
       <ValveControl className="lg:col-span-5" />
