@@ -223,11 +223,12 @@ function SensorCard({
 }
 
 function Sensors({ className }: { className?: string }) {
-  const { telemetry, phCalibrated } = useAppStore();
+  const { telemetry, phCalibrated, pressureCalibrated } = useAppStore();
   const hasTemp = hasValue(telemetry.temperature);
   const hasHum = hasValue(telemetry.humidity);
   const hasGasTemp = hasValue(telemetry.gasLineTemperature);
   const hasGasHum = hasValue(telemetry.gasLineHumidity);
+  const hasDigesterPress = hasValue(telemetry.pressureDigester);
   const hasPh =
     hasValue(telemetry.ph) &&
     phCalibrated &&
@@ -269,6 +270,20 @@ function Sensors({ className }: { className?: string }) {
     : !phCalibrated || ph < 6.5 || ph > 7.5
       ? "warn"
       : "good";
+
+  const pressStatus = !hasDigesterPress
+    ? "Sensor belum ada"
+    : !pressureCalibrated
+      ? "Belum dikalibrasi"
+      : telemetry.pressureDigester >= THRESHOLDS.valveOpenAt
+        ? "Siap alir"
+        : "Akumulasi gas";
+  const pressTone: "good" | "warn" | "neutral" | "danger" =
+    !hasDigesterPress || !pressureCalibrated
+      ? "neutral"
+      : telemetry.pressureDigester >= THRESHOLDS.valveOpenAt
+        ? "good"
+        : "neutral";
 
   return (
     <div className={cn("grid grid-cols-2 gap-4 lg:gap-6", className)}>
@@ -322,6 +337,19 @@ function Sensors({ className }: { className?: string }) {
               : "Kalibrasi 2 titik di Pengaturan"
         }
         tone={phTone}
+      />
+      <SensorCard
+        label="Tekanan Digester"
+        icon={<Gauge className="size-4" />}
+        value={fmtValue(telemetry.pressureDigester, 2)}
+        unit="kPa"
+        status={pressStatus}
+        hint={
+          hasDigesterPress
+            ? `Ambang buka ≥ ${THRESHOLDS.valveOpenAt.toFixed(1)} kPa`
+            : "Sensor HX710B #1 belum terhubung"
+        }
+        tone={pressTone}
       />
     </div>
   );
