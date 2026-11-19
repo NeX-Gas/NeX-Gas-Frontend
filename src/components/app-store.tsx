@@ -324,16 +324,6 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     [notify, setLanguageState],
   );
 
-  // Tanpa login/alat online perintah tidak pernah sampai ke relay. Jangan
-  // mengubah state lokal, supaya UI tidak menampilkan valve terbuka palsu.
-  const commandBlockedMessage = useCallback(
-    () =>
-      auth === null
-        ? "Login dulu di Pengaturan → Koneksi Backend (role operator/admin)"
-        : "Alat belum online — perintah tidak terkirim",
-    [auth],
-  );
-
   const setValveMode = useCallback(
     (mode: ValveMode) => {
       const current = systemRef.current;
@@ -341,18 +331,16 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         notify("Mode otomatis terkunci: kalibrasi tekanan 2 titik dulu");
         return;
       }
-      if (!sendCommand({ mode })) {
-        notify(commandBlockedMessage());
-        return;
-      }
       patch((prev) => ({ ...prev, valveMode: mode }));
+      const sent = sendCommand({ mode });
       notify(
         mode === "auto"
           ? "Kontrol valve: OTOMATIS (berdasarkan tekanan)"
           : "Kontrol valve: MANUAL",
       );
+      if (!sent) notify("Mode disimpan lokal — backend belum tersambung");
     },
-    [commandBlockedMessage, notify, patch, sendCommand],
+    [notify, patch, sendCommand],
   );
 
   const openValve = useCallback(() => {
@@ -365,22 +353,24 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       notify("Ditolak: kebocoran metana terdeteksi — valve tetap tertutup");
       return;
     }
-    if (!sendCommand({ valve: "open" })) {
-      notify(commandBlockedMessage());
-      return;
-    }
     patch((prev) => ({ ...prev, valveOpen: true }));
-    notify("Solenoid valve DIBUKA — gas mengalir ke penampung");
-  }, [commandBlockedMessage, notify, patch, sendCommand]);
+    const sent = sendCommand({ valve: "open" });
+    notify(
+      sent
+        ? "Solenoid valve DIBUKA — gas mengalir ke penampung"
+        : "Dibuka lokal — backend belum tersambung",
+    );
+  }, [notify, patch, sendCommand]);
 
   const closeValve = useCallback(() => {
-    if (!sendCommand({ valve: "close" })) {
-      notify(commandBlockedMessage());
-      return;
-    }
     patch((prev) => ({ ...prev, valveOpen: false }));
-    notify("Solenoid valve DITUTUP — gas terkumpul di digester");
-  }, [commandBlockedMessage, notify, patch, sendCommand]);
+    const sent = sendCommand({ valve: "close" });
+    notify(
+      sent
+        ? "Solenoid valve DITUTUP — gas terkumpul di digester"
+        : "Ditutup lokal — backend belum tersambung",
+    );
+  }, [notify, patch, sendCommand]);
 
   const resetFilterMaintenance = useCallback(() => {
     patch((prev) => ({
