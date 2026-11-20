@@ -1,71 +1,69 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import {
-  ClipboardList,
-  Fuel,
-  Plus,
-  TrendingDown,
-  TrendingUp,
-} from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ClipboardList, Fuel, Plus, TrendingUp } from "lucide-react";
 import { Button } from "@/components/button";
 import { LogInputModal } from "@/components/log-modal";
 import { ProductionChart, type Bar } from "@/components/production-chart";
 import { Card, ScreenTitle, SectionLabel, StatusPill } from "@/components/ui";
 import { useAppStore } from "@/components/app-store";
-import { weeklyProduction } from "@/lib/mock";
+import { fetchTelemetryHistory, getSession } from "@/lib/api";
 import { cn } from "@/lib/cn";
 
 type Period = "harian" | "mingguan" | "bulanan";
 
-const datasets: Record<
-  Period,
-  {
-    label: string;
-    total: string;
-    suffix: string;
-    target: number;
-    unit: string;
-    data: Bar[];
-  }
-> = {
-  harian: {
-    label: "Harian",
-    total: "4.0 m³",
-    suffix: "/ hari ini",
-    target: 1,
-    unit: "m³",
-    data: [
-      { label: "06", value: 0.4 },
-      { label: "09", value: 0.6 },
-      { label: "12", value: 0.9 },
-      { label: "15", value: 1.1 },
-      { label: "18", value: 0.7 },
-      { label: "21", value: 0.3 },
-    ],
-  },
-  mingguan: {
-    label: "Mingguan",
-    total: "11.9 m³",
-    suffix: "/ 7 hari terakhir",
-    target: 1.5,
-    unit: "m³",
-    data: weeklyProduction,
-  },
-  bulanan: {
-    label: "Bulanan",
-    total: "48.6 m³",
-    suffix: "/ 30 hari terakhir",
-    target: 12,
-    unit: "m³",
-    data: [
-      { label: "M1", value: 11.9 },
-      { label: "M2", value: 13.2 },
-      { label: "M3", value: 12.4 },
-      { label: "M4", value: 11.1 },
-    ],
-  },
+const PERIODS: Array<{
+  key: Period;
+  label: string;
+  suffix: string;
+  buckets: number;
+  bucketMs: number;
+}> = [
+  { key: "harian", label: "Harian", suffix: "/ 24 jam terakhir", buckets: 8, bucketMs: 3 * 3600_000 },
+  { key: "mingguan", label: "Mingguan", suffix: "/ 7 hari terakhir", buckets: 7, bucketMs: 24 * 3600_000 },
+  { key: "bulanan", label: "Bulanan", suffix: "/ 30 hari terakhir", buckets: 6, bucketMs: 5 * 24 * 3600_000 },
+];
+
+type Reading = {
+  receivedAt: string;
+  gasSinceStartTotalL: number | null;
 };
+
+/** Volume gas per bucket dari selisih counter firmware `gasSinceStartTotalL` (liter -> m³). */
+function buildBars(readings: Reading[], period: Period): Bar[] {
+  const cfg = PERIODS.find((p) => p.key === period)!;
+  const now = Date.now();
+  const start = now - cfg.buckets * cfg.bucketMs;
+  const litres = new Array<number>(cfg.buckets).fill(0);
+
+  let prev: { t: number; l: number } | null = null;
+  for (const r of readings) {
+    const t = new Date(r.receivedAt).getTime();
+    const l = r.gasSinceStartTotalL;
+    if (!Number.isFinite(t) || l == null || !Number.isFinite(l)) continue;
+    if (prev) {
+      const delta = l - prev.l;
+      // Counter reset saat alat restart -> abaikan, jangan dianggap produksi.
+      if (delta > 0 && t >= start) {
+        const idx = Math.min(
+          cfg.buckets - 1,
+          Math.max(0, Math.floor((t - start) / cfg.bucketMs)),
+        );
+        litres[idx] += delta;
+      }
+    }
+    prev = { t, l };
+  }
+
+  return litres.map((litre, i) => {
+    const at = new Date(start + i * cfg.bucketMs);
+    const label =
+      period === "harian"
+        ? `${String(at.getHours()).padStart(2, "0")}`
+        : at.toLocaleDateString("id-ID", { day: "2-digit", month: "short" });
+    return { label, value: Math.round((litre / 1000) * 100) / 100 };
+  });
+}
 
 function Segmented({
   value,
@@ -76,7 +74,7 @@ function Segmented({
 }) {
   return (
     <div className="flex gap-1 rounded-xl bg-info-50 p-1 card-shadow">
-      {(Object.keys(datasets) as Period[]).map((key) => {
+      {PERIODS.map(({ key, label }) => {
         const active = value === key;
         return (
           <button
@@ -90,7 +88,7 @@ function Segmented({
                 : "text-ink-2 hover:bg-info-100",
             )}
           >
-            {datasets[key].label}
+            {label}
           </button>
         );
       })}
@@ -98,7 +96,7 @@ function Segmented({
   );
 }
 
-function SavingsCard() {
+function GasTotalCard({ totalM3 }: { totalM3: number }) {
   return (
     <Card className="relative overflow-hidden bg-brand p-4 text-white">
       <span className="pointer-events-none absolute -right-4 -bottom-6 size-32 rounded-full bg-white/10" />
@@ -108,24 +106,17 @@ function SavingsCard() {
         </span>
         <div>
           <p className="text-[11px] font-semibold tracking-[0.08em] text-white/75 uppercase">
-            Pengganti Tabung LPG
+            Gas Tercatat Alat
           </p>
           <h3 className="mt-1 text-lg leading-[1.25] font-semibold">
-            Setara 12.5 kg LPG Dihemat
+            {totalM3.toFixed(2)} m³
             <br />
-            Bulan Ini
+            30 hari terakhir
           </h3>
         </div>
       </div>
-      <div className="relative mt-4 flex items-center gap-2 border-t border-white/25 pt-3">
-        <TrendingDown className="size-4 shrink-0" />
-        <span className="text-base font-bold">Hemat Rp 150.000</span>
-        <span className="text-sm text-white/70">/ bln</span>
-      </div>
-      <div className="relative mt-3">
-        <span className="inline-flex rounded-full bg-surface px-2.5 py-1 text-[13px] font-semibold text-brand">
-          Bebas Beli Gas Melon
-        </span>
+      <div className="relative mt-4 border-t border-white/25 pt-3 text-sm text-white/70">
+        Dihitung dari counter firmware <code>gasSinceStartTotalL</code>.
       </div>
     </Card>
   );
@@ -152,23 +143,45 @@ export default function RiwayatPage() {
   const [period, setPeriod] = useState<Period>("mingguan");
   const { logs, addLog } = useAppStore();
   const [open, setOpen] = useState(false);
+  const [readings, setReadings] = useState<Reading[]>([]);
 
-  const ds = datasets[period];
-  const peak = useMemo(
-    () =>
-      ds.data.reduce(
-        (acc, d) => (d.value > acc.value ? d : acc),
-        ds.data[0],
-      ),
-    [ds],
+  // Riwayat hanya dari backend (butuh login). Tanpa sesi -> grafik kosong,
+  // bukan angka contoh.
+  useEffect(() => {
+    if (!getSession()) return;
+    let cancelled = false;
+    void fetchTelemetryHistory(500)
+      .then((items) => {
+        if (!cancelled) setReadings(items);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const cfg = PERIODS.find((p) => p.key === period)!;
+  const bars = useMemo(() => buildBars(readings, period), [readings, period]);
+  const total = useMemo(
+    () => bars.reduce((sum, b) => sum + b.value, 0),
+    [bars],
   );
+  const total30 = useMemo(
+    () => buildBars(readings, "bulanan").reduce((sum, b) => sum + b.value, 0),
+    [readings],
+  );
+  const target = useMemo(() => {
+    const peak = Math.max(...bars.map((b) => b.value));
+    return peak > 0 ? Math.round(peak * 1.4 * 100) / 100 : 0;
+  }, [bars]);
+  const peak = bars.reduce((acc, b) => (b.value > acc.value ? b : acc), bars[0]);
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:gap-6">
       <ScreenTitle
         className="lg:col-span-12"
-        title="Estimasi Penghematan Energi"
-        subtitle="Pantau produksi biogas harian & konversi nilai rupiah"
+        title="Riwayat Produksi Biogas"
+        subtitle="Volume gas dari catatan backend, tanpa data contoh"
       />
 
       <div className="lg:col-span-12 lg:max-w-md">
@@ -181,34 +194,35 @@ export default function RiwayatPage() {
             <SectionLabel>Volume Biogas Dihasilkan</SectionLabel>
             <p className="mt-1 flex items-baseline gap-1.5">
               <span className="text-lg font-semibold text-ink">
-                {ds.total}
+                {total.toFixed(2)} m³
               </span>
-              <span className="text-sm text-ink-2">{ds.suffix}</span>
+              <span className="text-sm text-ink-2">{cfg.suffix}</span>
             </p>
           </div>
-          <StatusPill tone="good">Stabil</StatusPill>
+          <StatusPill tone="neutral">
+            {readings.length > 0 ? `${readings.length} catatan` : "Belum ada data"}
+          </StatusPill>
         </div>
 
         <ProductionChart
           key={period}
-          data={ds.data}
-          target={ds.target}
-          unit={ds.unit}
+          data={bars}
+          target={target}
+          unit="m³"
         />
 
         <div className="flex items-center gap-3 rounded-lg bg-info-50 p-3">
           <TrendingUp className="size-4 shrink-0 text-brand" />
           <p className="flex-1 text-[13px] font-semibold text-ink">
-            Puncak produksi: {peak.label} ({peak.value} m³)
+            {total > 0
+              ? `Puncak produksi: ${peak.label} (${peak.value} m³)`
+              : "Belum ada produksi tercatat. Data muncul setelah valve membuka dan backend menyimpan telemetry."}
           </p>
-          <span className="text-[13px] font-medium whitespace-nowrap text-muted">
-            Target +40%
-          </span>
         </div>
       </Card>
 
       <div className="flex flex-col gap-4 lg:col-span-5 lg:gap-6">
-        <SavingsCard />
+        <GasTotalCard totalM3={total30} />
         <QuickAction onLog={() => setOpen(true)} />
       </div>
 

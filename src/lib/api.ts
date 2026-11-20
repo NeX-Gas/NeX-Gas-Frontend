@@ -13,7 +13,9 @@ import type { DeviceCommand } from "./types";
  *   dan `frontend` (bentuk siap pakai untuk dashboard).
  */
 
-export const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/+$/, "");
+export const API_URL = (
+  process.env.NEXT_PUBLIC_API_URL ?? "https://backend-production-4135d719.up.railway.app"
+).replace(/\/+$/, "");
 
 /** ID alat default; sama dengan `DEFAULT_DEVICE_ID` di backend. */
 export const DEVICE_ID = process.env.NEXT_PUBLIC_DEVICE_ID ?? "nexgas-001";
@@ -303,6 +305,21 @@ const deviceQuery = `?deviceId=${encodeURIComponent(DEVICE_ID)}`;
 /** Ambil kondisi terakhir alat (dipakai saat halaman dibuka / WS reconnect). */
 export async function fetchSnapshot(): Promise<BackendSnapshot> {
   if (!isApiConfigured) return { telemetry: null, state: null, online: null };
+
+  try {
+    const res = await fetch(`${API_URL}/api/device/snapshot${deviceQuery}`);
+    if (res.ok) {
+      const body = (await res.json()) as Record<string, unknown>;
+      return {
+        telemetry: (body.telemetry as Record<string, unknown> | undefined) ?? null,
+        state: (body.state as Record<string, unknown> | undefined) ?? null,
+        online: typeof body.online === "boolean" ? body.online : null,
+      };
+    }
+  } catch {
+    // Abaikan error koneksi snapshot publik, coba jalur sesi
+  }
+
   if (!getSession()) return { telemetry: null, state: null, online: null };
 
   const [telemetry, state, status] = await Promise.all([
@@ -317,12 +334,17 @@ export async function fetchSnapshot(): Promise<BackendSnapshot> {
     apiFetch(`/api/status${deviceQuery}`).catch(() => null),
   ]);
 
-  const statusData = status?.data as { status?: string } | undefined;
+  const statusObj = status as Record<string, unknown> | null;
+  const statusData = statusObj?.data as Record<string, unknown> | undefined;
+  const rawStatus =
+    (typeof statusObj?.status === "string" ? statusObj.status : undefined) ??
+    (typeof statusData?.status === "string" ? statusData.status : undefined);
+  const online = typeof rawStatus === "string" ? rawStatus === "online" : null;
 
   return {
     telemetry: (telemetry?.data as Record<string, unknown> | undefined) ?? null,
     state: (state?.data as Record<string, unknown> | undefined) ?? null,
-    online: statusData?.status ? statusData.status === "online" : null,
+    online,
   };
 }
 

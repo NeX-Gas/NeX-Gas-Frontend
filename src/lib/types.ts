@@ -39,7 +39,8 @@ export type FilterUnit = {
   name: string;
   subtitle: string;
   status: { text: string; tone: Tone };
-  saturation: number;
+  /** null = tabung tidak punya sensor saturasi (bukan 0%). */
+  saturation: number | null;
   thresholds: Threshold[];
   scale: ScaleTick[];
   noteTitle: string;

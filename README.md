@@ -1,115 +1,138 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# NEX-GAS Frontend Dashboard
 
-## Integrasi alat (MQTT → backend → dashboard)
+Dashboard web modern untuk **NEX-GAS** (Sistem Pemantauan Reaktor Biogas & Pemurnian Anaerobik Cerdas). Dibangun menggunakan Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS, Lucide Icons, dan Recharts.
 
-Data alat masuk lewat satu pintu: `src/lib/use-device.ts`. Kontraknya
-mengikuti **NeX-Gas-Backend** (branch `feat/backend-core`), bukan format
-bebas.
+---
 
-- `NEXT_PUBLIC_WS_URL` kosong → dashboard jalan dengan **simulator lokal**
-  (`computeNext()` di `src/lib/system.ts`). Tidak ada data palsu yang
-  dikirim ke alat.
-- Diisi (mis. `wss://api.nex-gas.id/ws`) → dashboard membaca amplop yang
-  dikirim gateway WebSocket backend:
+## 1. Tujuan Proyek NEX-GAS
 
-```json
-{ "type": "telemetry", "deviceId": "nexgas-001", "data": { "...": "normalized" }, "frontend": { "...": "siap pakai" } }
-{ "type": "state",     "deviceId": "nexgas-001", "data": { "...": "valve/filter/kalibrasi" }, "frontend": { "telemetry": { "...": "" } } }
-{ "type": "status",    "deviceId": "nexgas-001", "data": { "status": "online" } }
-{ "type": "event",     "deviceId": "nexgas-001", "data": { "...": "event" }, "notification": { "...": "AppNotification" } }
+NEX-GAS Dashboard dirancang untuk memberikan visualisasi operasional reaktor biogas secara intuitif, akurat, dan transparan bagi operator maupun pengawas fasilitas:
+- Pemantauan real-time kadar metana ($\text{CH}_4$), hidrogen sulfida ($\text{H}_2\text{S}$), tekanan reaktor, dan kebocoran gas.
+- Evaluasi kinerja pemurnian gas dan estimasi kesehatan media filter absorben.
+- Transparansi status alat dan integritas data sensor tanpa manipulasi atau nilai sintetis palsu.
+- Ketahanan offline: dashboard tetap menyajikan data telemetri terakhir yang tersimpan di cloud database (Turso) dengan keterangan waktu yang jelas ketika perangkat ESP32 sedang tidak aktif.
+
+---
+
+## 2. Arsitektur Sistem & Aliran Data
+
+```
+┌─────────────────┐       MQTT (TLS 8883)       ┌────────────────────────────────────────────────────────┐
+│  ESP32 DevKit   │ ──────────────────────────> │                   NeX-Gas-Backend                      │
+│ (Gas & Pressure │                             │  1. HiveMQ Cloud Ingestion (TLS 8883)                  │
+│  Sensors, Valve)│ <────────────────────────── │  2. Turso Cloud & SQLite WAL Persistence               │
+└─────────────────┘        Command (cmd)        │  3. REST API & WebSocket Realtime Gateway              │
+                                                └──────────────────────────┬─────────────────────────────┘
+                                                                           │  HTTP REST & WebSocket
+                                                                           ▼
+                                                ┌────────────────────────────────────────────────────────┐
+                                                │                   NeX-Gas-Frontend                     │
+                                                │  - Hydration awal dari Turso via REST API              │
+                                                │  - Sinkronisasi real-time via WebSocket                │
+                                                │  - Watchdog koneksi online/offline akurat              │
+                                                │  - Visualisasi jujur & pelindung integritas sensor     │
+                                                └────────────────────────────────────────────────────────┘
 ```
 
-`src/lib/device.ts` (`parseBackendMessage()`) memetakan amplop itu ke state
-dashboard: nama panjang backend (`temperatureC`, `h2sAfter`, …) → payload
-firmware, dan `null` backend → sentinel `-1` supaya UI menampilkan
-"—" / "sensor belum terpasang" alih-alih angka palsu.
+---
 
-### REST & perintah
+## 3. Struktur Folder & Komponen Utama
 
-Semua endpoint backend dilindungi **Bearer JWT**:
+```
+NeX-Gas-Frontend/
+├── docs/
+│   └── NEXGAS_OFFLINE_DASHBOARD_VERIFICATION.md # Laporan verifikasi dashboard offline & screenshot
+├── src/
+│   ├── app/
+│   │   ├── page.tsx          # Halaman Dashboard Utama (Overview metana, tekanan, status sistem)
+│   │   ├── purifikasi/       # Halaman Pemantauan Filter H2S dan Efisiensi Pemurnian
+│   │   ├── riwayat/          # Halaman Log dan Riwayat Telemetri Kronologis
+│   │   ├── pengaturan/       # Halaman Konfigurasi Backend & Kontrol Kalibrasi
+│   │   └── layout.tsx        # Shell layout, navigasi sidebar, dan tema
+│   ├── components/
+│   │   ├── monitoring.tsx    # Komponen visualisasi telemetri, banner peringatan & status keamanan
+│   │   ├── app-store.tsx     # Context & penyedia state global aplikasi
+│   │   └── ui/               # Komponen UI modular (cards, dialog, badges, buttons)
+│   └── lib/
+│       ├── api.ts            # Client HTTP untuk REST endpoint backend (snapshot, history, command)
+│       ├── device.ts         # Parser amplop telemetri backend dan transformer data sensor
+│       ├── system.ts         # Nilai konstan inisialisasi aman (SENSOR_UNAVAILABLE = -1)
+│       ├── use-device.ts     # Hook utama sinkronisasi koneksi (WebSocket + REST snapshot fallback)
+│       └── types.ts          # Definisi antarmuka TypeScript untuk sistem telemetri
+└── package.json
+```
 
-| Aksi | Endpoint | Role |
-| --- | --- | --- |
-| Snapshot terakhir | `GET /api/telemetry/latest`, `GET /api/state`, `GET /api/status` | viewer/operator/admin |
-| Riwayat | `GET /api/history/telemetry`, `GET /api/history/events` | viewer/operator/admin |
-| Perintah | `POST /api/command` body `{ deviceId, command }` | operator/admin |
-| Login | `POST /api/auth/login`, `POST /api/auth/refresh`, `POST /api/auth/logout` | publik |
+---
 
-- Login tersedia di halaman **Pengaturan → Koneksi Backend**. Token disimpan
-  di `localStorage` (`nexgas-auth`) dan di-refresh otomatis sebelum
-  kedaluwarsa (akses 15 menit).
-- Perintah **tidak** dikirim lewat WebSocket. Backend membalas jujur:
-  `status: "published"`, `verificationStatus: "pending_execution"` — bukan
-  ACK firmware.
-- Kalau backend dijalankan dengan `PUBLIC_MQTT_TEST_MODE=true`, semua
-  perintah ditolak `403` dan pesannya ditampilkan apa adanya di UI.
-- CORS backend (`CORS_ALLOWED_ORIGINS`) harus memuat origin frontend,
-  mis. `https://nex-gas.vercel.app`.
+## 4. Status Sensor & Prinsip Kejujuran Data
 
-Salin `.env.example` menjadi `.env.local` lalu isi URL-nya:
+Aplikasi ini memegang prinsip ketat bahwa data sensor yang tidak valid atau belum terpasang **tidak boleh disamarkan** sebagai data normal:
 
+| Parameter | Status Fisik Sensor | Tampilan di Dashboard | Keterangan |
+| :--- | :--- | :--- | :--- |
+| **Metana ($\text{CH}_4$)** | Terpasang (MQ-4 #1) | Nilai aktual (%) | Terbaca dari ADC sensor saluran gas. |
+| **Kebocoran Gas** | Terpasang (MQ-4 #2) | Nilai ppm + Badge *Belum tervalidasi* | Pembacaan sensor kebocoran ambient disajikan dengan peringatan bahwa belum ada kalibrasi ruang tertutup. |
+| **$\text{H}_2\text{S}$ Outlet** | Terpasang (MQ-136 #2)| Nilai aktual (ppm) | Terbaca sesudah tabung pemurnian. |
+| **$\text{H}_2\text{S}$ Inlet** | Belum terpasang | `—` (Strip em-dash) | Sensor sebelum filter belum dipasang; efisiensi filter tidak dimanipulasi 100%. |
+| **Suhu & Kelembapan** | Terpasang (DHT22 #1 & #2)| `—` (Strip em-dash) | Mengalami kendala pembacaan sinyal pada firmware ESP32 (timeout/NAN). Dashboard tidak menampilkan angka acak atau suhu kamar default. |
+| **Sensor pH** | Belum terpasang (GPIO33)| `—` (Strip em-dash) | Sensor belum dihubungkan ke digester; pembacaan liar floating ADC ditolak dan tidak ditampilkan. |
+| **Indikator Keamanan**| Multi-parameter | *Data Belum Lengkap* | Status keselamatan tidak menyatakan "Aman" selama parameter penting (suhu/H2S/pH) belum beroperasi normal. |
+
+---
+
+## 5. Fitur yang Selesai & Ditingkatkan
+
+1. **Hidrasi Instan dari Turso Cloud (Offline Resilience)**:
+   - Saat dashboard dimuat, hook `useDevice` langsung memanggil API snapshot backend untuk mengambil record terbaru dari database Turso Cloud.
+   - Jika ESP32 sedang offline/dicabut, data terakhir tetap ditampilkan dengan label transparan: *"Data terakhir diterima: [Waktu]"*.
+2. **Watchdog Status Perangkat yang Akurat**:
+   - Menghilangkan status "Online Palsu". Status alat dievaluasi secara dinamis berdasarkan batas toleransi aman heartbeat telemetri (`STALE_AFTER_MS`), sinkron dengan Last Will and Testament (LWT) broker MQTT.
+3. **Penyaringan Inisialisasi Tanpa Angka Mock**:
+   - `initialSystem` menggunakan konstanta `SENSOR_UNAVAILABLE = -1` pada seluruh parameter sensor yang belum diterima dari alat riil, mencegah munculnya angka palsu saat halaman pertama kali dibuka.
+4. **Validasi Tipe Data & Build Bersih**:
+   - Kompatibel penuh dengan React 19 dan Next.js Turbopack compiler. Lolos pemeriksaan linting tanpa error dan lolos build produksi.
+
+---
+
+## 6. Cara Menjalankan Frontend Secara Lokal
+
+### Prasyarat
+- Node.js v20+ atau v22+
+- npm v10+
+
+### Langkah Instalasi:
 ```bash
-NEXT_PUBLIC_WS_URL=ws://localhost:5001/ws
+# 1. Masuk ke folder frontend
+cd NeX-Gas-Frontend
+
+# 2. Salin template konfigurasi environment
+cp .env.example .env.local
+
+# 3. Konfigurasi endpoint backend di .env.local:
 NEXT_PUBLIC_API_URL=http://localhost:5001
+NEXT_PUBLIC_WS_URL=ws://localhost:5001/ws
 NEXT_PUBLIC_DEVICE_ID=nexgas-001
-```
 
-Kontrak payload alat mengikuti `buildTelemetryJson()` / `buildStateJson()`
-di repo `NeX-Gas-Firmware`, dan tipe TypeScript-nya ada di `src/lib/types.ts`.
+# 4. Install dependencies
+npm install
 
-### Sidebar
-
-Menu kiri bisa diringkas jadi icon-only lewat tombol **Ringkas menu**
-(`PanelLeftClose` / `PanelLeftOpen`). Pilihan disimpan di
-`localStorage` (`nexgas:sidebar-collapsed`) sehingga tetap sama setelah
-refresh.
-
-### Yang jalan tanpa backend
-
-- Catatan harian (input kotoran), bahasa, riwayat penggantian filter, dan
-  notifikasi disimpan di `localStorage` (`src/lib/storage.ts`) — bertahan
-  setelah refresh, ikut sinkron antar tab.
-- Kalibrasi (`tare`, 2 titik tekanan, 2 titik pH, R0 MQ) ada di halaman
-  **Pengaturan**. Tombolnya otomatis nonaktif selama dashboard masih mode
-  demo / backend belum tersambung.
-- Mode otomatis valve terkunci sampai `pressureCalibrated` bernilai true,
-  sama seperti perilaku firmware.
-- Sensor yang belum terpasang (firmware mengirim `-1`) ditampilkan sebagai
-  `—` / "sensor belum terpasang", bukan angka palsu.
-- Grafik produksi mingguan di halaman Riwayat masih contoh statis (belum ada
-  data historis dari backend).
-
-## Getting Started
-
-First, run the development server:
-
-```bash
+# 5. Jalankan server pengembangan Next.js
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Buka peramban di `http://localhost:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Pemeriksaan Kualitas & Build Produksi:
+```bash
+# Jalankan linting
+npm run lint
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+# Jalankan build produksi
+npm run build
+```
 
-## Learn More
+---
 
-To learn more about Next.js, take a look at the following resources:
+## 7. Lisensi & Tim Pengembang
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Proyek ini dikembangkan oleh Tim Pengembang NEX-GAS.
