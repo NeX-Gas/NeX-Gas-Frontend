@@ -268,7 +268,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     "sidebar-collapsed",
     false,
   );
-  const { link, deviceOnline, lastError } = useAppStore();
+  const { link, deviceOnline, lastError, lastSeen } = useAppStore();
   const showOffline = link === "live" && !deviceOnline;
 
   return (
@@ -286,8 +286,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="mx-auto mt-3 flex max-w-md items-start gap-2 rounded-xl border border-danger-200 bg-danger-200/60 px-4 py-3 text-[13px] font-medium text-danger-800 lg:max-w-5xl">
             <AlertTriangle className="mt-0.5 size-4 shrink-0" />
             <span>
-              Alat offline — menampilkan data terakhir yang diterima. Periksa
-              koneksi WiFi/MQTT alat.
+              {lastSeen
+                ? "Alat offline — menampilkan data terakhir yang diterima. Periksa koneksi WiFi/MQTT alat."
+                : "Menunggu data pertama dari alat. Pastikan alat menyala, WiFi terhubung, dan MQTT aktif."}
             </span>
           </div>
         ) : null}

@@ -18,7 +18,7 @@ import {
   postCommand,
   subscribeAuth,
 } from "@/lib/api";
-import { computeNext, initialSystem } from "@/lib/system";
+import { computeNext, emptySystem, initialSystem } from "@/lib/system";
 import type {
   AppNotification,
   DeviceCommand,
@@ -65,7 +65,9 @@ export function useDevice(
   onEvent?: (event: FirmwareEvent) => void,
   onNotification?: (notification: AppNotification) => void,
 ): DeviceClient {
-  const [state, setState] = useState<SystemState>(initialSystem);
+  const [state, setState] = useState<SystemState>(
+    isDemoMode ? initialSystem : emptySystem,
+  );
   const [link, setLink] = useState<DeviceLink>(
     isDemoMode ? "demo" : "connecting",
   );

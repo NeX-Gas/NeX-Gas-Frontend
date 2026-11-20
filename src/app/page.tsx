@@ -44,7 +44,9 @@ function TopStatus({ className }: { className?: string }) {
         ? { text: "Online", tone: "bg-info-200 text-ink" }
         : link === "connecting"
           ? { text: "Menghubungkan…", tone: "bg-info-200 text-ink" }
-          : { text: "Offline", tone: "bg-danger-200 text-danger-800" };
+          : lastSeen
+            ? { text: "Offline", tone: "bg-danger-200 text-danger-800" }
+            : { text: "Menunggu data", tone: "bg-info-200 text-ink" };
 
   return (
     <Card className={cn("flex items-center gap-4 p-4", className)}>

@@ -23,6 +23,44 @@ export const SENSOR_UNAVAILABLE = -1;
  */
 export const BURN_RATE_LPH = 300;
 
+/**
+ * State awal untuk mode live sebelum data pertama masuk.
+ * Semua nilai sensor -1 supaya UI menampilkan "—", bukan angka contoh.
+ */
+export const emptySystem: SystemState = {
+  telemetry: {
+    ts: 0,
+    uptimeMs: 0,
+    h2sBefore: SENSOR_UNAVAILABLE,
+    h2sAfter: SENSOR_UNAVAILABLE,
+    ch4: SENSOR_UNAVAILABLE,
+    leak: SENSOR_UNAVAILABLE,
+    pressureDigester: SENSOR_UNAVAILABLE,
+    pressureCollector: SENSOR_UNAVAILABLE,
+    temperature: SENSOR_UNAVAILABLE,
+    humidity: SENSOR_UNAVAILABLE,
+    gasLineTemperature: SENSOR_UNAVAILABLE,
+    gasLineHumidity: SENSOR_UNAVAILABLE,
+    ph: SENSOR_UNAVAILABLE,
+    flow: 0,
+    gasSinceStartL: 0,
+    sensorsReady: false,
+    rssi: 0,
+  },
+  valveOpen: false,
+  valveMode: "auto",
+  filterHealth: 100,
+  filterWarning: false,
+  leakWarning: false,
+  pressureCalibrated: false,
+  phCalibrated: false,
+  buffered: 0,
+  firmware: "—",
+  deviceId: "nexgas-001",
+  deviceOnline: false,
+  lastSeen: null,
+};
+
 export const initialSystem: SystemState = {
   telemetry: {
     ts: 0,
