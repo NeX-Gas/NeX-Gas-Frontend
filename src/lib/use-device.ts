@@ -38,8 +38,8 @@ export type DeviceClient = {
   state: SystemState;
   link: DeviceLink;
   lastError: string | null;
-  /** Kirim perintah ke backend (`POST /api/command`). */
-  sendCommand: (command: DeviceCommand) => boolean;
+  /** Kirim perintah ke backend (`POST /api/command`). True = published ke broker. */
+  sendCommand: (command: DeviceCommand) => Promise<boolean>;
   /** Update optimistis; data dari alat akan menimpanya lagi. */
   patch: (updater: (prev: SystemState) => SystemState) => void;
   /** Ambil ulang kondisi terakhir dari REST (butuh login backend). */
@@ -230,7 +230,7 @@ export function useDevice(
     void hydrate();
   }, [hydrate]);
 
-  const sendCommand = useCallback((command: DeviceCommand) => {
+  const sendCommand = useCallback(async (command: DeviceCommand): Promise<boolean> => {
     if (!isApiConfigured) {
       setLastError(
         "NEXT_PUBLIC_API_URL belum diset — perintah butuh REST backend, bukan WebSocket.",
@@ -242,20 +242,22 @@ export function useDevice(
       return false;
     }
 
-    void postCommand(command)
-      .then((result) => {
-        setLastError(null);
-        if (result.verificationStatus !== "published") {
-          setLastError(result.message);
-        }
-      })
-      .catch((error: unknown) => {
-        setLastError(
-          error instanceof ApiError ? error.message : "Gagal mengirim perintah ke backend",
-        );
-      });
-
-    return true;
+    try {
+      const result = await postCommand(command);
+      if (result.status !== "published") {
+        setLastError(result.message);
+        return false;
+      }
+      // "pending_execution" adalah status normal: broker sudah menerima,
+      // firmware belum tentu mengeksekusi. Konfirmasi datang lewat topik state.
+      setLastError(null);
+      return true;
+    } catch (error: unknown) {
+      setLastError(
+        error instanceof ApiError ? error.message : "Gagal mengirim perintah ke backend",
+      );
+      return false;
+    }
   }, []);
 
   return { state, link, lastError, sendCommand, patch, refresh };

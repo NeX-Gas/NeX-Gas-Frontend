@@ -244,11 +244,15 @@ export function ValveControl({ className }: { className?: string }) {
               key={m.key}
               type="button"
               onClick={() => setValveMode(m.key)}
-              disabled={m.key === "auto" && !pressureCalibrated}
+              disabled={
+                !canCommand || (m.key === "auto" && !pressureCalibrated)
+              }
               title={
-                m.key === "auto" && !pressureCalibrated
-                  ? "Kalibrasi tekanan 2 titik dulu"
-                  : undefined
+                !canCommand
+                  ? "Login operator/admin dan pastikan alat online"
+                  : m.key === "auto" && !pressureCalibrated
+                    ? "Kalibrasi tekanan 2 titik dulu"
+                    : undefined
               }
               className={cn(
                 "inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-lg text-[13px] font-semibold transition-colors",
@@ -298,7 +302,7 @@ export function ValveControl({ className }: { className?: string }) {
       <div className="grid grid-cols-2 gap-2">
         <Button
           icon={Unlock}
-          disabled={valveMode !== "manual" || valveOpen}
+          disabled={!canCommand || valveMode !== "manual" || valveOpen}
           onClick={openValve}
         >
           Buka Valve
@@ -306,7 +310,7 @@ export function ValveControl({ className }: { className?: string }) {
         <Button
           variant="secondary"
           icon={Lock}
-          disabled={valveMode !== "manual" || !valveOpen}
+          disabled={!canCommand || valveMode !== "manual" || !valveOpen}
           onClick={closeValve}
         >
           Tutup Valve
@@ -320,7 +324,8 @@ export function ValveControl({ className }: { className?: string }) {
         </p>
       ) : !canCommand ? (
         <p className="rounded-lg bg-info-50 p-3 text-[12px] font-medium text-ink-2">
-          Alat offline atau belum login backend — tombol beroperasi dalam mode uji lokal.
+          Login sebagai operator/admin dan pastikan alat online — perintah
+          aktuator tidak dikirim dalam mode lokal.
         </p>
       ) : null}
 

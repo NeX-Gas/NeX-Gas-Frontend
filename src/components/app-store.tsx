@@ -70,7 +70,7 @@ type AppStore = {
   lastSeen: number | null;
   /** true kalau perintah bisa benar-benar sampai ke alat */
   canCommand: boolean;
-  sendCommand: (command: DeviceCommand) => boolean;
+  sendCommand: (command: DeviceCommand) => Promise<boolean>;
   /** Sesi login backend (JWT). `null` = belum login. */
   auth: AuthSession | null;
   /** true kalau `NEXT_PUBLIC_API_URL` diset. */
@@ -92,13 +92,13 @@ type AppStore = {
   openValve: () => void;
   closeValve: () => void;
   resetFilterMaintenance: () => void;
-  tare: () => boolean;
+  tare: () => Promise<boolean>;
   calibratePressure: (
     sensor: "digester" | "collector",
     kpa: number,
-  ) => boolean;
-  calibratePh: (ph: number) => boolean;
-  calibrateMq: (gas: "h2s" | "ch4" | "leak", refPpm: number) => boolean;
+  ) => Promise<boolean>;
+  calibratePh: (ph: number) => Promise<boolean>;
+  calibrateMq: (gas: "h2s" | "ch4" | "leak", refPpm: number) => Promise<boolean>;
   notify: (message: string) => void;
 };
 
@@ -325,25 +325,24 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
   );
 
   const setValveMode = useCallback(
-    (mode: ValveMode) => {
+    async (mode: ValveMode) => {
       const current = systemRef.current;
       if (mode === "auto" && !current.pressureCalibrated) {
         notify("Mode otomatis terkunci: kalibrasi tekanan 2 titik dulu");
         return;
       }
-      patch((prev) => ({ ...prev, valveMode: mode }));
-      const sent = sendCommand({ mode });
+      // Jangan ubah state lokal sebelum alat mengonfirmasi lewat topik state.
+      const sent = await sendCommand({ mode });
       notify(
-        mode === "auto"
-          ? "Kontrol valve: OTOMATIS (berdasarkan tekanan)"
-          : "Kontrol valve: MANUAL",
+        sent
+          ? `Perintah mode ${mode.toUpperCase()} terkirim — menunggu konfirmasi alat`
+          : "Perintah mode gagal dikirim",
       );
-      if (!sent) notify("Mode disimpan lokal — backend belum tersambung");
     },
-    [notify, patch, sendCommand],
+    [notify, sendCommand],
   );
 
-  const openValve = useCallback(() => {
+  const openValve = useCallback(async () => {
     const s = systemRef.current;
     if (s.valveMode !== "manual") {
       notify("Pilih mode Manual dulu untuk mengontrol valve");
@@ -353,24 +352,22 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       notify("Ditolak: kebocoran metana terdeteksi — valve tetap tertutup");
       return;
     }
-    patch((prev) => ({ ...prev, valveOpen: true }));
-    const sent = sendCommand({ valve: "open" });
+    const sent = await sendCommand({ valve: "open" });
     notify(
       sent
-        ? "Solenoid valve DIBUKA — gas mengalir ke penampung"
-        : "Dibuka lokal — backend belum tersambung",
+        ? "Perintah BUKA terkirim — menunggu konfirmasi alat"
+        : "Perintah buka valve gagal dikirim",
     );
-  }, [notify, patch, sendCommand]);
+  }, [notify, sendCommand]);
 
-  const closeValve = useCallback(() => {
-    patch((prev) => ({ ...prev, valveOpen: false }));
-    const sent = sendCommand({ valve: "close" });
+  const closeValve = useCallback(async () => {
+    const sent = await sendCommand({ valve: "close" });
     notify(
       sent
-        ? "Solenoid valve DITUTUP — gas terkumpul di digester"
-        : "Ditutup lokal — backend belum tersambung",
+        ? "Perintah TUTUP terkirim — menunggu konfirmasi alat"
+        : "Perintah tutup valve gagal dikirim",
     );
-  }, [notify, patch, sendCommand]);
+  }, [notify, sendCommand]);
 
   const resetFilterMaintenance = useCallback(() => {
     patch((prev) => ({
@@ -382,19 +379,19 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     notify("Media filter diganti — kesehatan filter direset 100%");
   }, [notify, patch]);
 
-  const tare = useCallback(() => {
-    const sent = sendCommand({ tare: true });
+  const tare = useCallback(async () => {
+    const sent = await sendCommand({ tare: true });
     notify(
       sent
-        ? "Perintah tare tekanan dikirim ke alat"
+        ? "Perintah tare tekanan terkirim — menunggu alat"
         : "Tare gagal: backend belum tersambung",
     );
     return sent;
   }, [notify, sendCommand]);
 
   const calibratePressure = useCallback(
-    (sensor: "digester" | "collector", kpa: number) => {
-      const sent = sendCommand({ cal_pressure_point: { sensor, kpa } });
+    async (sensor: "digester" | "collector", kpa: number) => {
+      const sent = await sendCommand({ cal_pressure_point: { sensor, kpa } });
       const label = sensor === "digester" ? "digester" : "penampung";
       notify(
         sent
@@ -407,8 +404,8 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
   );
 
   const calibratePh = useCallback(
-    (ph: number) => {
-      const sent = sendCommand({ cal_ph: { ph } });
+    async (ph: number) => {
+      const sent = await sendCommand({ cal_ph: { ph } });
       notify(
         sent
           ? `Kalibrasi pH ${ph} dikirim — bilas probe sebelum titik berikutnya`
@@ -420,8 +417,8 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
   );
 
   const calibrateMq = useCallback(
-    (gas: "h2s" | "ch4" | "leak", refPpm: number) => {
-      const sent = sendCommand({ cal_mq: { gas, ref_ppm: refPpm } });
+    async (gas: "h2s" | "ch4" | "leak", refPpm: number) => {
+      const sent = await sendCommand({ cal_mq: { gas, ref_ppm: refPpm } });
       notify(
         sent
           ? `Kalibrasi MQ ${gas.toUpperCase()} (${refPpm} ppm) dikirim`
