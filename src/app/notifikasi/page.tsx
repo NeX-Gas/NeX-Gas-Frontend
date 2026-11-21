@@ -64,7 +64,6 @@ function DiagnosticBanner({ className }: { className?: string }) {
     telemetry.leak,
     telemetry.ph,
     telemetry.temperature,
-    telemetry.humidity,
     telemetry.pressureDigester,
   ];
   const active = readings.filter(hasValue).length;
