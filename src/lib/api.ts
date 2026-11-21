@@ -366,6 +366,9 @@ export async function fetchTelemetryHistory(limit = 100): Promise<TelemetryHisto
 }
 
 export type CommandResult = {
+  /** `published` = broker sudah menerima perintah. */
+  status: string;
+  /** `pending_execution` = firmware belum tentu sudah mengeksekusi. */
   verificationStatus: string;
   message: string;
 };
@@ -384,7 +387,11 @@ export async function postCommand(command: DeviceCommand): Promise<CommandResult
   });
 
   return {
-    verificationStatus: typeof body.verificationStatus === "string" ? body.verificationStatus : "pending_execution",
+    status: typeof body.status === "string" ? body.status : "unknown",
+    verificationStatus:
+      typeof body.verificationStatus === "string"
+        ? body.verificationStatus
+        : "pending_execution",
     message:
       typeof body.message === "string"
         ? body.message
