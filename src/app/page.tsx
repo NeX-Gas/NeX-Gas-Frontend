@@ -188,7 +188,6 @@ function SensorCard({
 function Sensors({ className }: { className?: string }) {
   const { telemetry, phCalibrated } = useAppStore();
   const hasTemp = hasValue(telemetry.temperature);
-  const hasHum = hasValue(telemetry.humidity);
   const hasGasTemp = hasValue(telemetry.gasLineTemperature);
   const hasGasHum = hasValue(telemetry.gasLineHumidity);
   const hasPh =
@@ -203,14 +202,10 @@ function Sensors({ className }: { className?: string }) {
     hasTemp &&
     telemetry.temperature >= THRESHOLDS.tempMin &&
     telemetry.temperature <= THRESHOLDS.tempMax;
-  const humidityOk = hasHum && telemetry.humidity <= THRESHOLDS.humidityMax;
   const gasLineOk = hasGasHum && telemetry.gasLineHumidity <= THRESHOLDS.humidityMax;
 
   const tempStatus = !hasTemp ? "Sensor belum ada" : tempOptimal ? "Optimal" : "Di luar rentang";
   const tempTone: "good" | "warn" | "neutral" | "danger" = !hasTemp ? "neutral" : tempOptimal ? "good" : "warn";
-
-  const humStatus = !hasHum ? "Sensor belum ada" : humidityOk ? "Kering" : "Lembap";
-  const humTone: "good" | "warn" | "neutral" | "danger" = !hasHum ? "neutral" : humidityOk ? "good" : "warn";
 
   const gasTempStatus = !hasGasTemp ? "Sensor belum ada" : "Normal";
   const gasTempTone: "good" | "warn" | "neutral" | "danger" = !hasGasTemp ? "neutral" : "good";
@@ -251,17 +246,8 @@ function Sensors({ className }: { className?: string }) {
         value={fmtValue(telemetry.temperature, 1)}
         unit="°C"
         status={tempStatus}
-        hint={hasTemp ? "Mesofilik ideal 28° - 38°C" : "Sensor suhu (DS18B20 / DHT22) belum terhubung"}
+        hint={hasTemp ? "DS18B20 waterproof · pull-up 4.7kΩ · ideal 28–38°C" : "DS18B20 belum terhubung (pull-up 4.7kΩ)"}
         tone={tempTone}
-      />
-      <SensorCard
-        label="Kelembapan Digester"
-        icon={<Droplets className="size-4" />}
-        value={fmtValue(telemetry.humidity, 0)}
-        unit="%"
-        status={humStatus}
-        hint={hasHum ? "DHT22 #1 headspace" : hasTemp ? "Tidak tersedia pada probe DS18B20" : "Sensor belum terhubung"}
-        tone={humTone}
       />
       <SensorCard
         label="Suhu Jalur Gas"
