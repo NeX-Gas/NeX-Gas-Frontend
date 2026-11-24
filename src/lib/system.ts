@@ -24,6 +24,16 @@ export const SENSOR_UNAVAILABLE = -1;
 export const BURN_RATE_LPH = 300;
 
 /**
+ * Asumsi hasil gas dari input kotoran (m³/kg). Ini BUKAN pengukuran alat;
+ * dipakai hanya untuk catatan manual dan selalu ditampilkan sebagai estimasi.
+ */
+export const GAS_YIELD_M3_PER_KG = 0.072;
+
+export function estimateGasM3(kg: number): number {
+  return Math.round(kg * GAS_YIELD_M3_PER_KG * 10) / 10;
+}
+
+/**
  * State awal untuk mode live sebelum data pertama masuk.
  * Semua nilai sensor -1 supaya UI menampilkan "—", bukan angka contoh.
  */

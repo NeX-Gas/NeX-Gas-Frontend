@@ -263,13 +263,15 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       const stamp = new Date().toLocaleDateString("id-ID", {
         day: "2-digit",
         month: "short",
+        year: "numeric",
       });
       const entry: LogEntry = {
         id: nextId(),
-        date: `Hari Ini, ${stamp}`,
+        date: stamp,
         input: `Input kotoran: ${inputKg} kg`,
         gas,
-        status: { text: "Kualitas Baik", tone: "good" },
+        // Bukan hasil ukur alat: hasil gas adalah asumsi, bukan kualitas terverifikasi.
+        status: { text: "Estimasi", tone: "neutral" },
       };
       setLogs((prev) => [entry, ...prev].slice(0, MAX_STORED_LOGS));
       notify(`Catatan ${inputKg} kg berhasil disimpan`);

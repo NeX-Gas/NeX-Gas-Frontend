@@ -15,6 +15,18 @@ import {
 import { Button } from "@/components/button";
 import { Card, StatusBadge } from "@/components/ui";
 import { useAppStore } from "@/components/app-store";
+
+function formatNotificationTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value; // "Baru saja" dan sejenisnya
+  return date.toLocaleString("id-ID", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZoneName: "short",
+  });
+}
 import { hasValue } from "@/lib/format";
 import type { AppNotification, NotificationSeverity } from "@/lib/types";
 import { cn } from "@/lib/cn";
@@ -114,7 +126,7 @@ function NotificationCard({ item }: { item: AppNotification }) {
           <div className="flex items-center gap-2">
             <StatusBadge tone={cfg.badge}>{item.badge}</StatusBadge>
             <span className="text-[13px] font-semibold text-ink-2">
-              {item.time}
+              {formatNotificationTime(item.time)}
             </span>
           </div>
           <h3 className="mt-1.5 text-lg leading-[1.35] font-semibold whitespace-pre-line text-ink">
@@ -127,17 +139,21 @@ function NotificationCard({ item }: { item: AppNotification }) {
       </div>
 
       <div className="flex items-center justify-between gap-3 pt-1">
-        <Button
-          variant="soft"
-          size="sm"
-          icon={BookOpen}
-          onClick={() => {
-            markRead(item.id);
-            notify(`Membuka: ${item.action}`);
-          }}
-        >
-          {item.action}
-        </Button>
+        {item.action ? (
+          <Button
+            variant="soft"
+            size="sm"
+            icon={BookOpen}
+            onClick={() => {
+              markRead(item.id);
+              notify(`Membuka: ${item.action}`);
+            }}
+          >
+            {item.action}
+          </Button>
+        ) : (
+          <span />
+        )}
         <button
           type="button"
           onClick={() => markRead(item.id)}

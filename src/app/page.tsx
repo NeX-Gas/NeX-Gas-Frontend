@@ -30,7 +30,7 @@ import {
 import { useAppStore } from "@/components/app-store";
 import { digester } from "@/lib/mock";
 import { fmtValue, hasValue } from "@/lib/format";
-import { BURN_RATE_LPH, h2sTone, THRESHOLDS } from "@/lib/system";
+import { BURN_RATE_LPH, estimateGasM3, h2sTone, THRESHOLDS } from "@/lib/system";
 import { cn } from "@/lib/cn";
 
 function TopStatus({ className }: { className?: string }) {
@@ -68,7 +68,8 @@ function TopStatus({ className }: { className?: string }) {
                 hour: "2-digit",
                 minute: "2-digit",
                 second: "2-digit",
-              })} WIB (${new Date(lastSeen).toLocaleDateString("id-ID", {
+                timeZoneName: "short",
+              })} (${new Date(lastSeen).toLocaleDateString("id-ID", {
                 day: "2-digit",
                 month: "short",
                 year: "numeric",
@@ -383,7 +384,7 @@ export default function DashboardPage() {
       {open ? (
         <LogInputModal
           onClose={() => setOpen(false)}
-          onSave={(kg) => addLog(kg, `${(kg * 0.072).toFixed(1)} m³`)}
+          onSave={(kg) => addLog(kg, `≈ ${estimateGasM3(kg).toFixed(1)} m³ (estimasi)`)}
         />
       ) : null}
     </div>
