@@ -66,6 +66,8 @@ export const emptySystem: SystemState = {
   cal: null,
   leakLatched: false,
   calSensor: "none",
+  authCmd: false,
+  authMsgs: false,
   deviceOnline: false,
   lastSeen: null,
 };
@@ -109,6 +111,8 @@ export const initialSystem: SystemState = {
   cal: null,
   leakLatched: false,
   calSensor: "none",
+  authCmd: false,
+  authMsgs: false,
   deviceOnline: false,
   lastSeen: null,
 };

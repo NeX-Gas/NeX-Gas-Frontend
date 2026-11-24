@@ -106,6 +106,8 @@ export function normalizeState(
     cal: (src.cal as CalibrationReadback | undefined) ?? prev.cal,
     leakLatched: bool(src.leakLatched, prev.leakLatched),
     calSensor: text(src.calSensor, prev.calSensor),
+    authCmd: bool(src.authCmd, prev.authCmd),
+    authMsgs: bool(src.authMsgs, prev.authMsgs),
     pressureCalibrated: bool(
       src.pressureCalibrated,
       prev.pressureCalibrated,
@@ -343,6 +345,8 @@ function stateFromBackend(envelope: Record<string, unknown>): Record<string, unk
     cal: source.cal ?? null,
     leakLatched: source.leakLatched,
     calSensor: source.calSensor,
+    authCmd: source.authCmd,
+    authMsgs: source.authMsgs,
   };
 
   const telemetry = (frontend.telemetry ?? null) as Record<string, unknown> | null;

@@ -127,6 +127,9 @@ export type SystemState = {
   cal: CalibrationReadback | null;
   leakLatched: boolean;
   calSensor: string;
+  /** Saklar keamanan yang dilaporkan alat. */
+  authCmd: boolean;
+  authMsgs: boolean;
   deviceOnline: boolean;
   /** epoch ms terakhir ada data masuk ke dashboard */
   lastSeen: number | null;
