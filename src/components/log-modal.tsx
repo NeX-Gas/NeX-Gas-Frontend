@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/button";
+import { estimateGasM3 } from "@/lib/system";
 import { cn } from "@/lib/cn";
 
 const quick = [15, 20, 25, 30];
@@ -25,7 +26,7 @@ export function LogInputModal({
   }, [onClose]);
 
   const valid = Number.isFinite(kg) && kg > 0 && kg <= 500;
-  const gas = valid ? (kg * 0.072).toFixed(1) : "0.0";
+  const gas = valid ? estimateGasM3(kg).toFixed(1) : "0.0";
 
   return (
     <div

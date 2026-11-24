@@ -7,6 +7,7 @@ import { LogInputModal } from "@/components/log-modal";
 import { ProductionChart, type Bar } from "@/components/production-chart";
 import { Card, ScreenTitle, SectionLabel, StatusPill } from "@/components/ui";
 import { useAppStore } from "@/components/app-store";
+import { estimateGasM3 } from "@/lib/system";
 import { fetchTelemetryHistory, getSession } from "@/lib/api";
 import { cn } from "@/lib/cn";
 
@@ -266,7 +267,7 @@ export default function RiwayatPage() {
       {open ? (
         <LogInputModal
           onClose={() => setOpen(false)}
-          onSave={(kg) => addLog(kg, `${(kg * 0.072).toFixed(1)} m³`)}
+          onSave={(kg) => addLog(kg, `≈ ${estimateGasM3(kg).toFixed(1)} m³ (estimasi)`)}
         />
       ) : null}
     </div>
