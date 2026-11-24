@@ -8,6 +8,7 @@ import { useAppStore } from "@/components/app-store";
 import {
   fetchFirmwareLatest,
   installFirmware,
+  uploadFirmware,
   type FirmwareManifest,
 } from "@/lib/api";
 import { cn } from "@/lib/cn";
@@ -20,6 +21,10 @@ export function FirmwareCard({ className }: { className?: string }) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<string | null>(null);
+  const [version, setVersion] = useState("");
+  const [changelog, setChangelog] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [uploadBusy, setUploadBusy] = useState(false);
 
   const load = useCallback(async () => {
     if (!isAdmin) return;
@@ -137,6 +142,69 @@ export function FirmwareCard({ className }: { className?: string }) {
           {result}
         </p>
       ) : null}
+
+      <div className="flex flex-col gap-3 rounded-lg border border-info-200 p-3">
+        <p className="text-[12px] font-semibold text-ink">Publikasikan binary baru</p>
+        <div className="grid gap-2 sm:grid-cols-3">
+          <label className="flex flex-col gap-1">
+            <span className="text-[11px] font-semibold text-ink-2">File .bin (≤ 2 MB)</span>
+            <input
+              type="file"
+              accept=".bin,application/octet-stream"
+              onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+              className="text-[12px] text-ink-2"
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-[11px] font-semibold text-ink-2">Versi</span>
+            <input
+              value={version}
+              onChange={(event) => setVersion(event.target.value)}
+              placeholder="1.1.1"
+              className="h-10 rounded-lg border border-info-300 bg-info-50 px-3 font-mono text-[13px] font-semibold text-ink focus:border-brand focus:outline-none"
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-[11px] font-semibold text-ink-2">Changelog</span>
+            <input
+              value={changelog}
+              onChange={(event) => setChangelog(event.target.value)}
+              placeholder="opsional"
+              className="h-10 rounded-lg border border-info-300 bg-info-50 px-3 text-[13px] font-semibold text-ink focus:border-brand focus:outline-none"
+            />
+          </label>
+        </div>
+        <Button
+          size="sm"
+          variant="secondary"
+          icon={Upload}
+          disabled={!file || !version || uploadBusy || !canCommand}
+          onClick={async () => {
+            if (!file) return;
+            if (file.size > 2_000_000) {
+              setResult("File terlalu besar untuk slot OTA 1,9 MB (maks 2 MB).");
+              return;
+            }
+            setUploadBusy(true);
+            setResult(null);
+            try {
+              const uploaded = await uploadFirmware(version, file, changelog);
+              setManifest(uploaded);
+              setVersion("");
+              setChangelog("");
+              setFile(null);
+              setResult(`Firmware ${uploaded.version} dipublikasikan (${uploaded.sha256.slice(0, 12)}…).`);
+              notify(`Firmware ${uploaded.version} siap di-OTA`);
+            } catch (err) {
+              setResult(err instanceof Error ? err.message : "Upload firmware gagal");
+            } finally {
+              setUploadBusy(false);
+            }
+          }}
+        >
+          {uploadBusy ? "Mengunggah…" : "Upload & publish"}
+        </Button>
+      </div>
 
       <p className="text-[11px] leading-4 text-muted">
         Alat menutup valve, mengunduh binary, memverifikasi SHA-256, lalu reboot.

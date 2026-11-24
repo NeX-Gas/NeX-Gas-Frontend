@@ -443,6 +443,46 @@ export async function fetchFirmwareLatest(): Promise<{
   };
 }
 
+export async function uploadFirmware(
+  version: string,
+  file: File,
+  changelog = "",
+): Promise<FirmwareManifest> {
+  const body = await apiFetch(
+    `/api/firmware/upload?version=${encodeURIComponent(version)}&changelog=${encodeURIComponent(changelog)}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/octet-stream" },
+      body: file,
+    },
+  );
+  const manifest = body.manifest as FirmwareManifest | undefined;
+  if (!manifest || typeof manifest.version !== "string") {
+    throw new ApiError("Upload tidak mengembalikan manifest firmware.", 502);
+  }
+  return manifest;
+}
+
+export type DeviceConfigSnapshot = {
+  config: Record<string, unknown>;
+  receivedAt: string;
+  signed: boolean;
+};
+
+export async function fetchDeviceConfig(): Promise<DeviceConfigSnapshot | null> {
+  try {
+    const body = await apiFetch(`/api/device/config${deviceQuery}`);
+    return {
+      config: (body.config as Record<string, unknown> | undefined) ?? {},
+      receivedAt: typeof body.receivedAt === "string" ? body.receivedAt : "",
+      signed: body.signed === true,
+    };
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) return null;
+    throw error;
+  }
+}
+
 export async function installFirmware(): Promise<{
   version: string;
   verificationStatus: string;

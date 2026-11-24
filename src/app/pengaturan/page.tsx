@@ -8,6 +8,7 @@ import { DeviceStatusCard } from "@/components/device-panel";
 import { BackendPanel } from "@/components/backend-panel";
 import { FirmwareCard } from "@/components/firmware-card";
 import { SecurityCard } from "@/components/security-card";
+import { ConfigCard } from "@/components/config-card";
 import { operationalSettings } from "@/lib/mock";
 import { THRESHOLDS } from "@/lib/system";
 import type { Language } from "@/lib/types";
@@ -157,6 +158,7 @@ export default function PengaturanPage() {
       </Card>
       <FirmwareCard className="lg:col-span-12" />
       <SecurityCard className="lg:col-span-12" />
+      <ConfigCard className="lg:col-span-12" />
       <div className="flex flex-col gap-4 lg:col-span-12 lg:gap-6">
         <Preferences />
         <ParameterSection />
