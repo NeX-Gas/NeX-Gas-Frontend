@@ -85,6 +85,8 @@ export function GasMonitor({ className }: { className?: string }) {
   const beforeAvailable = hasValue(h2sBefore);
   const afterAvailable = hasValue(h2sAfter);
   const ch4Available = hasValue(ch4);
+  // Firmware mengirim estimate ppm dari kurva MQ-4; UI menampilkan % (ppm/10.000).
+  const ch4Pct = ch4Available ? ch4 / 10000 : ch4;
   const leakAvailable = hasValue(leak);
   const afterTone = h2sTone(h2sAfter);
 
@@ -158,12 +160,12 @@ export function GasMonitor({ className }: { className?: string }) {
         />
         <StatTile
           label="Metana (CH₄)"
-          value={fmtValue(ch4, 0)}
+          value={fmtValue(ch4Pct, 1)}
           unit="%"
           icon={Flame}
           tone={ch4Available ? "good" : "neutral"}
-          status={ch4Available ? "Kandungan baik" : "Menunggu data alat"}
-          hint={ch4Available ? "Relatif • sensor MQ-4" : "Sensor MQ-4 #1 digestate"}
+          status={ch4Available ? "Estimasi" : "Menunggu data alat"}
+          hint={ch4Available ? "Estimasi MQ-4 (ppm ÷ 10.000)" : "Sensor MQ-4 #1 digestate"}
         />
         <StatTile
           label="Kebocoran Metana"
@@ -196,11 +198,11 @@ export function GasMonitor({ className }: { className?: string }) {
         />
         <div className="mt-1 flex items-center justify-between text-[13px] font-semibold text-ink-2">
           <span>Kesehatan Media Filter</span>
-          <span className="text-ink">{filterHealth > 0 ? `${Math.round(filterHealth)}%` : "—"}</span>
+          <span className="text-ink">{filterHealth >= 0 ? `${Math.round(filterHealth)}%` : "—"}</span>
         </div>
         <ProgressBar
-          value={filterHealth}
-          tone={filterHealth < 40 ? "warn" : "good"}
+          value={filterHealth >= 0 ? filterHealth : 0}
+          tone={filterHealth < 0 ? "warn" : filterHealth < 40 ? "warn" : "good"}
           className="h-2.5"
         />
       </div>
@@ -219,7 +221,6 @@ export function ValveControl({ className }: { className?: string }) {
     leakWarning,
     pressureCalibrated,
     canCommand,
-    auth,
   } = useAppStore();
   const delta = telemetry.pressureDigester - telemetry.pressureCollector;
   const modes: { key: ValveMode; label: string; icon: LucideIcon }[] = [
@@ -467,7 +468,7 @@ export function PressureMonitor({ className }: { className?: string }) {
 export function FilterMaintenanceCard({ className }: { className?: string }) {
   const { filterHealth, telemetry, leakWarning, resetFilterMaintenance } =
     useAppStore();
-  const remaining = Math.max(0, Math.round(filterHealth * 0.45));
+  const remaining = filterHealth >= 0 ? Math.max(0, Math.round(filterHealth * 0.45)) : -1;
 
   return (
     <Card className={cn("flex flex-col gap-4 p-4", className)}>
@@ -480,18 +481,18 @@ export function FilterMaintenanceCard({ className }: { className?: string }) {
         </div>
         <IconTile
           icon={Filter}
-          tone={filterHealth < 40 ? "danger" : "info"}
+          tone={filterHealth < 0 ? "info" : filterHealth < 40 ? "danger" : "info"}
         />
       </div>
 
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between text-[13px] font-semibold text-ink-2">
           <span>Estimasi sisa umur (45 hari)</span>
-          <span className="text-ink">{remaining} hari</span>
+          <span className="text-ink">{remaining >= 0 ? `${remaining} hari` : "—"}</span>
         </div>
         <ProgressBar
-          value={filterHealth}
-          tone={filterHealth < 40 ? "warn" : "good"}
+          value={filterHealth >= 0 ? filterHealth : 0}
+          tone={filterHealth < 0 ? "warn" : filterHealth < 40 ? "warn" : "good"}
           className="h-3"
         />
       </div>

@@ -20,19 +20,38 @@ NEX-GAS Dashboard dirancang untuk memberikan visualisasi operasional reaktor bio
 ┌─────────────────┐       MQTT (TLS 8883)       ┌────────────────────────────────────────────────────────┐
 │  ESP32 DevKit   │ ──────────────────────────> │                   NeX-Gas-Backend                      │
 │ (Gas & Pressure │                             │  1. HiveMQ Cloud Ingestion (TLS 8883)                  │
-│  Sensors, Valve)│ <────────────────────────── │  2. Turso Cloud & SQLite WAL Persistence               │
+│  Sensors, Valve)│ <────────────────────────── │  2. SQLite WAL Persistence (backend)               │
 └─────────────────┘        Command (cmd)        │  3. REST API & WebSocket Realtime Gateway              │
                                                 └──────────────────────────┬─────────────────────────────┘
                                                                            │  HTTP REST & WebSocket
                                                                            ▼
                                                 ┌────────────────────────────────────────────────────────┐
                                                 │                   NeX-Gas-Frontend                     │
-                                                │  - Hydration awal dari Turso via REST API              │
+                                                │  - Hydration awal via REST API (butuh login)              │
                                                 │  - Sinkronisasi real-time via WebSocket                │
                                                 │  - Watchdog koneksi online/offline akurat              │
                                                 │  - Visualisasi jujur & pelindung integritas sensor     │
                                                 └────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## 2b. Fitur v1.1.0 (kalibrasi & OTA dari web)
+
+- **`/kalibrasi`** — wizard kalibrasi semua hardware: tekanan 2 titik + tare,
+  pH 2 buffer, R0 H₂S/CH₄/ambient, offset DS18B20/DHT22, konstanta flow, tes
+  valve, dan selftest. Nilai mentah dan `state.cal` ditampilkan dari alat.
+- **Kartu Firmware** di `/pengaturan` — versi terpasang, manifest terbaru,
+  tombol update OTA. Hanya admin.
+- **WebSocket butuh tiket.** Data live hanya muncul setelah login (backend
+  mengeluarkan tiket 60 detik lewat `POST /api/auth/ws-ticket`). Tanpa login,
+  dashboard menampilkan status offline, bukan data contoh.
+- **Data jujur:** tidak ada angka seed di mode live, CH₄ dikonversi dari ppm
+  ke % dengan label estimasi, dan penggantian filter hanya dicatat (tidak
+  mengubah kesehatan filter dari sensor).
+
+Login ada di halaman **Pengaturan → Backend**. Role `admin` diperlukan untuk
+kalibrasi dan OTA; `operator` untuk valve/mode; `viewer` hanya membaca.
 
 ---
 

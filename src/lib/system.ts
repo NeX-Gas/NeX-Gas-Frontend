@@ -46,10 +46,16 @@ export const emptySystem: SystemState = {
     gasSinceStartL: 0,
     sensorsReady: false,
     rssi: 0,
+    rawPd: SENSOR_UNAVAILABLE,
+    rawPc: SENSOR_UNAVAILABLE,
+    phVolts: SENSOR_UNAVAILABLE,
+    r0h2s: SENSOR_UNAVAILABLE,
+    r0ch4: SENSOR_UNAVAILABLE,
+    r0leak: SENSOR_UNAVAILABLE,
   },
   valveOpen: false,
   valveMode: "auto",
-  filterHealth: 100,
+  filterHealth: -1,
   filterWarning: false,
   leakWarning: false,
   pressureCalibrated: false,
@@ -57,6 +63,9 @@ export const emptySystem: SystemState = {
   buffered: 0,
   firmware: "—",
   deviceId: "nexgas-001",
+  cal: null,
+  leakLatched: false,
+  calSensor: "none",
   deviceOnline: false,
   lastSeen: null,
 };
@@ -80,10 +89,16 @@ export const initialSystem: SystemState = {
     gasSinceStartL: SENSOR_UNAVAILABLE,
     sensorsReady: false,
     rssi: SENSOR_UNAVAILABLE,
+    rawPd: SENSOR_UNAVAILABLE,
+    rawPc: SENSOR_UNAVAILABLE,
+    phVolts: SENSOR_UNAVAILABLE,
+    r0h2s: SENSOR_UNAVAILABLE,
+    r0ch4: SENSOR_UNAVAILABLE,
+    r0leak: SENSOR_UNAVAILABLE,
   },
   valveOpen: false,
   valveMode: "auto",
-  filterHealth: 0,
+  filterHealth: 100,
   filterWarning: false,
   leakWarning: false,
   pressureCalibrated: false,
@@ -91,6 +106,9 @@ export const initialSystem: SystemState = {
   buffered: 0,
   firmware: "1.0.0",
   deviceId: "nexgas-001",
+  cal: null,
+  leakLatched: false,
+  calSensor: "none",
   deviceOnline: false,
   lastSeen: null,
 };
@@ -114,7 +132,7 @@ export function computeNext(prev: SystemState): SystemState {
     0.5,
     28,
   );
-  t.ch4 = clamp(t.ch4 + rand(-1, 1), 45, 85);
+  t.ch4 = clamp(t.ch4 + rand(-8000, 8000), 450000, 800000); // ppm (45-80 %)
   t.leak = clamp(t.leak + rand(-30, 32), 0, 1500);
   t.temperature = clamp(t.temperature + rand(-0.3, 0.3), 26, 40);
   t.humidity = clamp(t.humidity + rand(-1.5, 1.5), 55, 99);

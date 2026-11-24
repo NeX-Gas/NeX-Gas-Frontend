@@ -14,6 +14,7 @@ import {
   ApiError,
   fetchSnapshot,
   getSession,
+  getWsTicket,
   isApiConfigured,
   postCommand,
   subscribeAuth,
@@ -72,6 +73,7 @@ export function useDevice(
     isDemoMode ? "demo" : "connecting",
   );
   const [lastError, setLastError] = useState<string | null>(null);
+  const [authNonce, setAuthNonce] = useState(0);
   const onEventRef = useRef(onEvent);
   const onNotificationRef = useRef(onNotification);
   const socketRef = useRef<WebSocket | null>(null);
@@ -128,14 +130,33 @@ export function useDevice(
     let pingTimer: ReturnType<typeof setInterval> | undefined;
     let attempt = 0;
 
-    const connect = () => {
+    const connect = async () => {
       if (cancelled) return;
       void hydrate(() => cancelled);
       setLink((prev) => (prev === "live" ? prev : "connecting"));
 
+      let ticket: string | null = null;
+      if (getSession()) {
+        try {
+          ticket = await getWsTicket();
+        } catch (error) {
+          if (cancelled) return;
+          setLastError(
+            error instanceof ApiError ? error.message : "Gagal mengambil tiket WebSocket",
+          );
+        }
+      }
+      if (cancelled) return;
+
+      if (!ticket) {
+        setLink("offline");
+        setLastError("Login backend untuk menerima data live (WebSocket butuh tiket).");
+        return;
+      }
+
       let socket: WebSocket;
       try {
-        socket = new WebSocket(DEVICE_WS_URL);
+        socket = new WebSocket(`${DEVICE_WS_URL}?ticket=${encodeURIComponent(ticket)}`);
       } catch (error) {
         setLastError(error instanceof Error ? error.message : "URL tidak valid");
         setLink("offline");
@@ -162,8 +183,13 @@ export function useDevice(
         try {
           const parsed = parseBackendMessage(JSON.parse(event.data as string));
           if (!parsed) return;
-          if (parsed.notification) onNotificationRef.current?.(parsed.notification);
-          applyIncoming(parsed.message);
+          if (parsed.notification) {
+            // Backend already produced the notification; do not create a second one.
+            onNotificationRef.current?.(parsed.notification);
+            setState((prev) => applyMessage(prev, parsed.message).state);
+          } else {
+            applyIncoming(parsed.message);
+          }
         } catch {
           setLastError("Payload backend bukan JSON yang valid");
         }
@@ -187,7 +213,7 @@ export function useDevice(
       };
     };
 
-    connect();
+    void connect();
 
     return () => {
       cancelled = true;
@@ -196,12 +222,13 @@ export function useDevice(
       socketRef.current?.close();
       socketRef.current = null;
     };
-  }, [applyIncoming, hydrate]);
+  }, [applyIncoming, hydrate, authNonce]);
 
-  // ---- setelah login/logout, ambil ulang snapshot ----
+  // ---- setelah login/logout: hidrasi ulang + reconnect dengan tiket baru ----
   useEffect(() => {
     if (isDemoMode) return;
     return subscribeAuth(() => {
+      setAuthNonce((n) => n + 1);
       if (getSession()) void hydrate();
     });
   }, [hydrate]);

@@ -57,6 +57,16 @@ export type ValveMode = "auto" | "manual";
 /** Sumber data dashboard: alat asli lewat backend, atau simulator lokal. */
 export type DeviceLink = "live" | "connecting" | "demo" | "offline";
 
+/** Readback kalibrasi dari firmware v1.1.0 (`state.cal`). */
+export type CalibrationReadback = {
+  pd?: { ok?: boolean; scale?: number; offset?: number };
+  pc?: { ok?: boolean; scale?: number; offset?: number };
+  ph?: { ok?: boolean; v686?: number; v401?: number };
+  mq?: { h2s?: number; ch4?: number; leak?: number };
+  env?: { ds?: number; dhtT?: number; dhtH?: number };
+  flow?: number;
+};
+
 /**
  * Payload `nexgas/<DEVICE_ID>/telemetry` dari firmware.
  * Nilai -1 berarti sensor belum memberi data valid (lihat `sensorValue()`).
@@ -86,6 +96,13 @@ export type Telemetry = {
   sensorsReady: boolean;
   /** dBm, 0 = WiFi putus */
   rssi: number;
+  /** Nilai mentah untuk wizard kalibrasi (v1.1.0). -1 = tidak tersedia. */
+  rawPd: number;
+  rawPc: number;
+  phVolts: number;
+  r0h2s: number;
+  r0ch4: number;
+  r0leak: number;
 };
 
 /**
@@ -106,6 +123,10 @@ export type SystemState = {
   buffered: number;
   firmware: string;
   deviceId: string;
+  /** `null` = alat belum pernah mengirim readback kalibrasi. */
+  cal: CalibrationReadback | null;
+  leakLatched: boolean;
+  calSensor: string;
   deviceOnline: boolean;
   /** epoch ms terakhir ada data masuk ke dashboard */
   lastSeen: number | null;

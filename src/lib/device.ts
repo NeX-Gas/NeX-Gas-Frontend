@@ -6,6 +6,7 @@ import type {
   SystemState,
   Telemetry,
   ValveMode,
+  CalibrationReadback,
 } from "./types";
 
 /**
@@ -75,10 +76,16 @@ export function normalizeTelemetry(
     gasLineHumidity: num(src.gasLineHumidity, prev.gasLineHumidity),
     ph: num(src.ph, prev.ph),
     // firmware: L/menit; dashboard: L/jam
-    flow: isSensorValue(src.flow) ? lpmToLph(num(src.flow, prev.flow)) : prev.flow,
+    flow: isSensorValue(src.flow) ? lpmToLph(num(src.flow, 0)) : -1,
     gasSinceStartL: num(src.gasSinceStartL, prev.gasSinceStartL),
     sensorsReady: bool(src.sensorsReady, prev.sensorsReady),
     rssi: num(src.rssi, prev.rssi),
+    rawPd: num(src.rawPd, prev.rawPd),
+    rawPc: num(src.rawPc, prev.rawPc),
+    phVolts: num(src.phVolts, prev.phVolts),
+    r0h2s: num(src.r0h2s, prev.r0h2s),
+    r0ch4: num(src.r0ch4, prev.r0ch4),
+    r0leak: num(src.r0leak, prev.r0leak),
   };
 }
 
@@ -96,6 +103,9 @@ export function normalizeState(
     filterWarning: bool(src.filterWarning, prev.filterWarning),
     leakWarning: bool(src.leakWarning, prev.leakWarning),
     filterHealth: num(src.filterHealth, prev.filterHealth),
+    cal: (src.cal as CalibrationReadback | undefined) ?? prev.cal,
+    leakLatched: bool(src.leakLatched, prev.leakLatched),
+    calSensor: text(src.calSensor, prev.calSensor),
     pressureCalibrated: bool(
       src.pressureCalibrated,
       prev.pressureCalibrated,
@@ -257,6 +267,8 @@ function telemetryFromBackend(envelope: Record<string, unknown>): Record<string,
   const source = (data.telemetry ?? frontend.telemetry ?? null) as Record<string, unknown> | null;
 
   // `data` = payload ternormalisasi backend (NULL dipertahankan), `frontend` = subset siap pakai.
+  const raw = (data.raw ?? {}) as Record<string, unknown>;
+
   if (Object.keys(data).length > 0) {
     return {
       ts: typeof data.deviceTimestamp === "string" ? Math.floor(new Date(data.deviceTimestamp).getTime() / 1000) : 0,
@@ -278,6 +290,12 @@ function telemetryFromBackend(envelope: Record<string, unknown>): Record<string,
       gasSinceStartL: nullToUnavailable(data.gasSinceStartTotalL ?? data.gasSinceStartL),
       sensorsReady: typeof data.sensorsReady === "boolean" ? data.sensorsReady : undefined,
       rssi: nullToUnavailable(data.rssi),
+      rawPd: nullToUnavailable(raw.rawPd),
+      rawPc: nullToUnavailable(raw.rawPc),
+      phVolts: nullToUnavailable(raw.phVolts),
+      r0h2s: nullToUnavailable(raw.r0h2s),
+      r0ch4: nullToUnavailable(raw.r0ch4),
+      r0leak: nullToUnavailable(raw.r0leak),
     };
   }
 
@@ -322,6 +340,9 @@ function stateFromBackend(envelope: Record<string, unknown>): Record<string, unk
     buffered: source.buffered,
     firmware: source.firmware,
     uptimeMs: source.uptimeMs,
+    cal: source.cal ?? null,
+    leakLatched: source.leakLatched,
+    calSensor: source.calSensor,
   };
 
   const telemetry = (frontend.telemetry ?? null) as Record<string, unknown> | null;
@@ -453,6 +474,7 @@ export function messagesFromSnapshot(snapshot: {
   telemetry: Record<string, unknown> | null;
   state: Record<string, unknown> | null;
   online: boolean | null;
+  receivedAt?: string | null;
 }): DeviceMessage[] {
   const messages: DeviceMessage[] = [];
   if (snapshot.state) {
@@ -475,7 +497,11 @@ export function messagesFromSnapshot(snapshot: {
     });
   }
   if (snapshot.online !== null) {
-    messages.push({ type: "status", payload: snapshot.online ? "online" : "offline" });
+    messages.push({
+      type: "status",
+      payload: snapshot.online ? "online" : "offline",
+      receivedAt: snapshot.receivedAt ?? undefined,
+    });
   }
   return messages;
 }
