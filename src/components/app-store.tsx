@@ -103,13 +103,6 @@ type AppStore = {
   openValve: () => void;
   closeValve: () => void;
   resetFilterMaintenance: () => void;
-  tare: () => Promise<boolean>;
-  calibratePressure: (
-    sensor: "digester" | "collector",
-    kpa: number,
-  ) => Promise<boolean>;
-  calibratePh: (ph: number) => Promise<boolean>;
-  calibrateMq: (gas: "h2s" | "ch4" | "leak", refPpm: number) => Promise<boolean>;
   notify: (message: string) => void;
 };
 
@@ -406,56 +399,6 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     [notify],
   );
 
-  const tare = useCallback(async () => {
-    const sent = await sendCommand({ tare: true });
-    notify(
-      sent
-        ? "Perintah tare tekanan terkirim — menunggu alat"
-        : "Tare gagal: backend belum tersambung",
-    );
-    return sent;
-  }, [notify, sendCommand]);
-
-  const calibratePressure = useCallback(
-    async (sensor: "digester" | "collector", kpa: number) => {
-      const sent = await sendCommand({ cal_pressure_point: { sensor, kpa } });
-      const label = sensor === "digester" ? "digester" : "penampung";
-      notify(
-        sent
-          ? `Titik kalibrasi tekanan ${label} (${kpa} kPa) dikirim`
-          : "Kalibrasi gagal: backend belum tersambung",
-      );
-      return sent;
-    },
-    [notify, sendCommand],
-  );
-
-  const calibratePh = useCallback(
-    async (ph: number) => {
-      const sent = await sendCommand({ cal_ph: { ph } });
-      notify(
-        sent
-          ? `Kalibrasi pH ${ph} dikirim — bilas probe sebelum titik berikutnya`
-          : "Kalibrasi gagal: backend belum tersambung",
-      );
-      return sent;
-    },
-    [notify, sendCommand],
-  );
-
-  const calibrateMq = useCallback(
-    async (gas: "h2s" | "ch4" | "leak", refPpm: number) => {
-      const sent = await sendCommand({ cal_mq: { gas, ref_ppm: refPpm } });
-      notify(
-        sent
-          ? `Kalibrasi MQ ${gas.toUpperCase()} (${refPpm} ppm) dikirim`
-          : "Kalibrasi gagal: backend belum tersambung",
-      );
-      return sent;
-    },
-    [notify, sendCommand],
-  );
-
   const value = useMemo<AppStore>(() => {
     const unreadCount = notifications.filter((n) => n.unread).length;
     const criticalCount = notifications.filter(
@@ -516,10 +459,6 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       openValve,
       closeValve,
       resetFilterMaintenance,
-      tare,
-      calibratePressure,
-      calibratePh,
-      calibrateMq,
       notify,
     };
   }, [
@@ -545,10 +484,6 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     openValve,
     closeValve,
     resetFilterMaintenance,
-    tare,
-    calibratePressure,
-    calibratePh,
-    calibrateMq,
     calibrate,
     notify,
   ]);
