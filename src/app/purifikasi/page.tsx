@@ -215,27 +215,42 @@ export default function PurifikasiPage() {
     unit.id === "carbon-active"
       ? {
           ...unit,
-          saturation: Math.max(0, Math.min(100, Math.round(100 - filterHealth))),
-          status: filterWarning
-            ? { text: "Jenuh", tone: "warn" as Tone }
-            : { text: "Aman", tone: "good" as Tone },
-          noteTitle: filterWarning
-            ? "H₂S menembus filter"
-            : "Media masih aktif",
-          noteBody: filterWarning
-            ? `H₂S sesudah filter ${fmtValue(
-                telemetry.h2sAfter,
-                1,
-              )} ppm — ganti karbon aktif.`
-            : "H₂S sesudah filter masih di bawah ambang aman.",
-          noteTone: filterWarning ? ("warn" as Tone) : ("good" as Tone),
+          saturation:
+            filterHealth >= 0
+              ? Math.max(0, Math.min(100, Math.round(100 - filterHealth)))
+              : null,
+          status:
+            filterHealth < 0
+              ? { text: "Menunggu data", tone: "neutral" as Tone }
+              : filterWarning
+                ? { text: "Jenuh", tone: "warn" as Tone }
+                : { text: "Aman", tone: "good" as Tone },
+          noteTitle:
+            filterHealth < 0
+              ? "Belum ada data alat"
+              : filterWarning
+                ? "H₂S menembus filter"
+                : "Media masih aktif",
+          noteBody:
+            filterHealth < 0
+              ? "Kesehatan filter dihitung dari H₂S sesudah filter yang dikirim alat."
+              : filterWarning
+                ? `H₂S sesudah filter ${fmtValue(
+                    telemetry.h2sAfter,
+                    1,
+                  )} ppm — ganti karbon aktif.`
+                : "H₂S sesudah filter masih di bawah ambang aman.",
+          noteTone:
+            filterHealth < 0 ? ("neutral" as Tone) : filterWarning ? ("warn" as Tone) : ("good" as Tone),
         }
       : unit,
   );
 
+  // Default ke filter karbon: silika tidak punya sensor saturasi.
+  const carbon = units.find((unit) => unit.id === "carbon-active") ?? units[0];
   const mostSaturated = units.reduce(
     (acc, f) => ((f.saturation ?? -1) > (acc.saturation ?? -1) ? f : acc),
-    units[0],
+    carbon,
   );
 
   return (

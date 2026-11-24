@@ -1,10 +1,12 @@
 "use client";
 
-import { ChevronRight, Languages, Leaf, Radio, User } from "lucide-react";
+import Link from "next/link";
+import { ChevronRight, Languages, Leaf, Radio, User, Wrench } from "lucide-react";
 import { Card, IconTile, SectionLabel } from "@/components/ui";
 import { useAppStore } from "@/components/app-store";
-import { CalibrationPanel, DeviceStatusCard } from "@/components/device-panel";
+import { DeviceStatusCard } from "@/components/device-panel";
 import { BackendPanel } from "@/components/backend-panel";
+import { FirmwareCard } from "@/components/firmware-card";
 import { operationalSettings } from "@/lib/mock";
 import { THRESHOLDS } from "@/lib/system";
 import type { Language } from "@/lib/types";
@@ -132,7 +134,27 @@ export default function PengaturanPage() {
 
       <BackendPanel className="lg:col-span-5" />
 
-      <CalibrationPanel className="lg:col-span-7" />
+      <Card className="flex flex-col gap-3 p-4 lg:col-span-7">
+        <SectionLabel>Kalibrasi</SectionLabel>
+        <div className="flex items-start gap-3">
+          <IconTile icon={Wrench} tone="info" size="sm" />
+          <div className="min-w-0 flex-1">
+            <h3 className="text-lg font-semibold text-ink">Pusat Kalibrasi</h3>
+            <p className="mt-1 text-sm text-ink-2">
+              Tekanan 2 titik, pH 2 buffer, R0 gas, offset suhu, konstanta flow,
+              tes valve, dan selftest — semua dari web.
+            </p>
+          </div>
+        </div>
+        <Link
+          href="/kalibrasi"
+          className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-brand px-4 text-[13px] font-semibold text-white"
+        >
+          Buka Pusat Kalibrasi
+          <ChevronRight className="size-4" />
+        </Link>
+      </Card>
+      <FirmwareCard className="lg:col-span-12" />
       <div className="flex flex-col gap-4 lg:col-span-12 lg:gap-6">
         <Preferences />
         <ParameterSection />

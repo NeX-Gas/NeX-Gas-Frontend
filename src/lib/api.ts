@@ -204,34 +204,51 @@ export async function logout(): Promise<void> {
   writeSession(null);
 }
 
+let refreshInFlight: Promise<AuthSession> | null = null;
+
+/**
+ * Single-flight: several protected requests can see an expired token at once.
+ * Without this, each one rotates the refresh token and the backend treats the
+ * second rotation as reuse, revoking the whole token family.
+ */
 async function refreshSession(session: AuthSession): Promise<AuthSession> {
-  let response: Response;
-  try {
-    response = await fetch(`${API_URL}/api/auth/refresh`, {
-      method: "POST",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${session.accessToken}`,
-      },
-      body: JSON.stringify({ refreshToken: session.refreshToken }),
+  if (refreshInFlight) return refreshInFlight;
+
+  refreshInFlight = (async () => {
+    let response: Response;
+    try {
+      response = await fetch(`${API_URL}/api/auth/refresh`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.accessToken}`,
+        },
+        body: JSON.stringify({ refreshToken: session.refreshToken }),
+      });
+    } catch {
+      throw new ApiError("Backend tidak bisa dihubungi saat memperbarui sesi.");
+    }
+
+    const body = await readJson(response);
+    if (!response.ok) {
+      writeSession(null);
+      throw new ApiError(describeError(response.status, body), response.status);
+    }
+
+    const next = sessionFromResponse({
+      user: session.user,
+      ...(body as unknown as { accessToken: string; refreshToken: string; expiresIn?: number }),
     });
-  } catch {
-    throw new ApiError("Backend tidak bisa dihubungi saat memperbarui sesi.");
-  }
+    writeSession(next);
+    return next;
+  })();
 
-  const body = await readJson(response);
-  if (!response.ok) {
-    writeSession(null);
-    throw new ApiError(describeError(response.status, body), response.status);
+  try {
+    return await refreshInFlight;
+  } finally {
+    refreshInFlight = null;
   }
-
-  const next = sessionFromResponse({
-    user: session.user,
-    ...(body as unknown as { accessToken: string; refreshToken: string; expiresIn?: number }),
-  });
-  writeSession(next);
-  return next;
 }
 
 /** Token akses yang masih berlaku; refresh otomatis kalau hampir kedaluwarsa. */
@@ -298,53 +315,119 @@ export type BackendSnapshot = {
   telemetry: Record<string, unknown> | null;
   state: Record<string, unknown> | null;
   online: boolean | null;
+  receivedAt: string | null;
 };
 
 const deviceQuery = `?deviceId=${encodeURIComponent(DEVICE_ID)}`;
 
 /** Ambil kondisi terakhir alat (dipakai saat halaman dibuka / WS reconnect). */
 export async function fetchSnapshot(): Promise<BackendSnapshot> {
-  if (!isApiConfigured) return { telemetry: null, state: null, online: null };
+  if (!isApiConfigured) return { telemetry: null, state: null, online: null, receivedAt: null };
+  if (!getSession()) return { telemetry: null, state: null, online: null, receivedAt: null };
 
-  try {
-    const res = await fetch(`${API_URL}/api/device/snapshot${deviceQuery}`);
-    if (res.ok) {
-      const body = (await res.json()) as Record<string, unknown>;
-      return {
-        telemetry: (body.telemetry as Record<string, unknown> | undefined) ?? null,
-        state: (body.state as Record<string, unknown> | undefined) ?? null,
-        online: typeof body.online === "boolean" ? body.online : null,
-      };
-    }
-  } catch {
-    // Abaikan error koneksi snapshot publik, coba jalur sesi
+  const body = await apiFetch(`/api/device/snapshot${deviceQuery}`);
+  return {
+    telemetry: (body.telemetry as Record<string, unknown> | undefined) ?? null,
+    state: (body.state as Record<string, unknown> | undefined) ?? null,
+    online: typeof body.online === "boolean" ? body.online : null,
+    receivedAt: typeof body.receivedAt === "string" ? body.receivedAt : null,
+  };
+}
+
+/** Tiket WebSocket 60 detik; browser tidak bisa set header Authorization pada WS. */
+export async function getWsTicket(): Promise<string> {
+  const body = await apiFetch("/api/auth/ws-ticket", { method: "POST" });
+  if (typeof body.ticket !== "string" || body.ticket.length === 0) {
+    throw new ApiError("Backend tidak mengirim tiket WebSocket.", 502);
   }
+  return body.ticket;
+}
 
-  if (!getSession()) return { telemetry: null, state: null, online: null };
+export type CalibrationRequest =
+  | { action: "begin"; sensor: string }
+  | { action: "point"; sensor: "pressure_digester" | "pressure_collector"; kpa: number }
+  | { action: "ph"; buffer: number }
+  | { action: "mq"; sensor: "h2s" | "ch4" | "leak"; refPpm?: number }
+  | { action: "set"; sensor: "ds18b20" | "dht22" | "flow"; value?: number; t?: number; h?: number }
+  | { action: "tare"; sensor: "pressure_digester" | "pressure_collector" }
+  | { action: "reset"; sensor: "pressure_digester" | "pressure_collector" | "ph" }
+  | { action: "valve"; ms: number }
+  | { action: "abort" }
+  | { action: "selftest" };
 
-  const [telemetry, state, status] = await Promise.all([
-    apiFetch(`/api/telemetry/latest${deviceQuery}`).catch((error: unknown) => {
-      if (error instanceof ApiError && error.status === 404) return null;
-      throw error;
-    }),
-    apiFetch(`/api/state${deviceQuery}`).catch((error: unknown) => {
-      if (error instanceof ApiError && error.status === 404) return null;
-      throw error;
-    }),
-    apiFetch(`/api/status${deviceQuery}`).catch(() => null),
-  ]);
+export type CalibrationResult = {
+  status: string;
+  verificationStatus: string;
+  commandId: string;
+  ack: {
+    id: string;
+    ok: boolean;
+    err?: string;
+    result?: Record<string, unknown>;
+  } | null;
+  message: string;
+};
 
-  const statusObj = status as Record<string, unknown> | null;
-  const statusData = statusObj?.data as Record<string, unknown> | undefined;
-  const rawStatus =
-    (typeof statusObj?.status === "string" ? statusObj.status : undefined) ??
-    (typeof statusData?.status === "string" ? statusData.status : undefined);
-  const online = typeof rawStatus === "string" ? rawStatus === "online" : null;
+export async function postCalibration(
+  request: CalibrationRequest,
+): Promise<CalibrationResult> {
+  const body = await apiFetch("/api/calibration", {
+    method: "POST",
+    body: JSON.stringify({ deviceId: DEVICE_ID, ...request }),
+  });
 
   return {
-    telemetry: (telemetry?.data as Record<string, unknown> | undefined) ?? null,
-    state: (state?.data as Record<string, unknown> | undefined) ?? null,
-    online,
+    status: typeof body.status === "string" ? body.status : "unknown",
+    verificationStatus:
+      typeof body.verificationStatus === "string" ? body.verificationStatus : "pending_execution",
+    commandId: typeof body.commandId === "string" ? body.commandId : "",
+    ack:
+      body.ack && typeof body.ack === "object"
+        ? (body.ack as CalibrationResult["ack"])
+        : null,
+    message:
+      typeof body.message === "string" ? body.message : "Perintah kalibrasi terkirim.",
+  };
+}
+
+export type FirmwareManifest = {
+  file: string;
+  version: string;
+  sha256: string;
+  size: number;
+  changelog: string;
+  publishedAt: string;
+};
+
+export async function fetchFirmwareLatest(): Promise<{
+  latest: FirmwareManifest;
+  currentVersion: string | null;
+}> {
+  const body = await apiFetch(`/api/firmware/latest${deviceQuery}`);
+  const latest = body.latest as FirmwareManifest | undefined;
+  if (!latest || typeof latest.version !== "string") {
+    throw new ApiError("Manifest firmware tidak ditemukan di backend.", 404);
+  }
+  return {
+    latest,
+    currentVersion: typeof body.currentVersion === "string" ? body.currentVersion : null,
+  };
+}
+
+export async function installFirmware(): Promise<{
+  version: string;
+  verificationStatus: string;
+  message: string;
+}> {
+  const body = await apiFetch("/api/firmware/install", {
+    method: "POST",
+    body: JSON.stringify({ deviceId: DEVICE_ID }),
+  });
+  return {
+    version: typeof body.version === "string" ? body.version : "?",
+    verificationStatus:
+      typeof body.verificationStatus === "string" ? body.verificationStatus : "pending_execution",
+    message: typeof body.message === "string" ? body.message : "Perintah OTA terkirim.",
   };
 }
 
@@ -359,10 +442,11 @@ export type TelemetryHistoryResponse = {
   }>;
 };
 
-export async function fetchTelemetryHistory(limit = 100): Promise<TelemetryHistoryResponse["items"]> {
-  const body = await apiFetch(`/api/history/telemetry${deviceQuery}&limit=${limit}&order=asc`);
+export async function fetchTelemetryHistory(limit = 500): Promise<TelemetryHistoryResponse["items"]> {
+  // Newest first from the API, then reversed so counter deltas stay monotonic.
+  const body = await apiFetch(`/api/history/telemetry${deviceQuery}&limit=${limit}&order=desc`);
   const items = (body.items ?? body.data ?? []) as TelemetryHistoryResponse["items"];
-  return Array.isArray(items) ? items : [];
+  return Array.isArray(items) ? items.slice().reverse() : [];
 }
 
 export type CommandResult = {

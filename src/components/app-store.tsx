@@ -23,8 +23,11 @@ import {
   isApiConfigured,
   login as loginRequest,
   logout as logoutRequest,
+  postCalibration,
   subscribeAuth,
   type AuthSession,
+  type CalibrationRequest,
+  type CalibrationResult,
 } from "@/lib/api";
 import { DEVICE_WS_URL, isSensorValue } from "@/lib/device";
 import type {
@@ -57,6 +60,12 @@ type AppStore = {
   filterHealth: number;
   filterWarning: boolean;
   leakWarning: boolean;
+  /** Readback kalibrasi terakhir dari firmware (v1.1.0). */
+  cal: import("@/lib/types").CalibrationReadback | null;
+  leakLatched: boolean;
+  calSensor: string;
+  /** Kirim satu langkah kalibrasi bertanda tangan lewat backend. */
+  calibrate: (request: CalibrationRequest) => Promise<CalibrationResult | null>;
   /** `live` = data alat asli, `demo` = simulator lokal */
   link: DeviceLink;
   deviceOnline: boolean;
@@ -134,17 +143,26 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     "id",
   );
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const toastTimers = useRef(new Map<number, ReturnType<typeof setTimeout>>());
   const warnRef = useRef({ filter: false, leak: false });
 
   const notify = useCallback((message: string) => {
     // Dua toast bisa lahir di milidetik yang sama -> id harus unik.
     const id = uid++;
     setToasts((prev) => [...prev, { id, message }]);
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    timeoutRef.current = setTimeout(() => {
+    const timer = setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
+      toastTimers.current.delete(id);
     }, 2600);
+    toastTimers.current.set(id, timer);
+  }, []);
+
+  useEffect(() => {
+    const timers = toastTimers.current;
+    return () => {
+      timers.forEach((timer) => clearTimeout(timer));
+      timers.clear();
+    };
   }, []);
 
   const onDeviceEvent = useCallback(
@@ -200,7 +218,6 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     link,
     lastError,
     sendCommand,
-    patch,
     refresh,
   } = useDevice(onDeviceEvent, onBackendNotification);
   const systemRef = useRef(system);
@@ -299,16 +316,10 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         },
         ...prev,
       ]);
-      notify(`${unit?.name ?? "Filter"} ditandai sudah diganti`);
-      patch((prev) => ({
-        ...prev,
-        filterHealth: 100,
-        filterWarning: false,
-        telemetry: { ...prev.telemetry, h2sAfter: 2.5 },
-      }));
+      notify(`${unit?.name ?? "Filter"} dicatat sudah diganti (catatan lokal)`);
       warnRef.current = { ...warnRef.current, filter: false };
     },
-    [filters, notify, patch, setFilters, setReplacementLogs],
+    [filters, notify, setFilters, setReplacementLogs],
   );
 
   const setLanguage = useCallback(
@@ -370,14 +381,26 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
   }, [notify, sendCommand]);
 
   const resetFilterMaintenance = useCallback(() => {
-    patch((prev) => ({
-      ...prev,
-      filterHealth: 100,
-      filterWarning: false,
-    }));
-    warnRef.current = { ...warnRef.current, filter: false };
-    notify("Media filter diganti — kesehatan filter direset 100%");
-  }, [notify, patch]);
+    notify("Catatan penggantian disimpan. Kesehatan filter mengikuti sensor H₂S alat.");
+  }, [notify]);
+
+  const calibrate = useCallback(
+    async (request: CalibrationRequest): Promise<CalibrationResult | null> => {
+      try {
+        const result = await postCalibration(request);
+        if (result.ack && !result.ack.ok) {
+          notify(`Alat menolak: ${result.ack.err ?? "error"}`);
+        } else {
+          notify(result.message);
+        }
+        return result;
+      } catch (error: unknown) {
+        notify(error instanceof Error ? error.message : "Kalibrasi gagal dikirim");
+        return null;
+      }
+    },
+    [notify],
+  );
 
   const tare = useCallback(async () => {
     const sent = await sendCommand({ tare: true });
@@ -432,7 +455,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<AppStore>(() => {
     const unreadCount = notifications.filter((n) => n.unread).length;
     const criticalCount = notifications.filter(
-      (n) => n.category === "peringatan",
+      (n) => n.category === "peringatan" && n.unread,
     ).length;
     return {
       logs,
@@ -448,6 +471,10 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       filterHealth: system.filterHealth,
       filterWarning: system.filterWarning,
       leakWarning: system.leakWarning,
+      cal: system.cal,
+      leakLatched: system.leakLatched,
+      calSensor: system.calSensor,
+      calibrate,
       link,
       deviceOnline: system.deviceOnline,
       pressureCalibrated: system.pressureCalibrated,
@@ -516,6 +543,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     calibratePressure,
     calibratePh,
     calibrateMq,
+    calibrate,
     notify,
   ]);
 

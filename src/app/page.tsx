@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import {
-  Check,
   ClipboardPlus,
   Droplet,
   Droplets,
@@ -190,9 +189,9 @@ function Sensors({ className }: { className?: string }) {
   const hasTemp = hasValue(telemetry.temperature);
   const hasGasTemp = hasValue(telemetry.gasLineTemperature);
   const hasGasHum = hasValue(telemetry.gasLineHumidity);
+  // Tampilkan nilai yang dikirim alat; status kalibrasi ditampilkan terpisah.
   const hasPh =
     hasValue(telemetry.ph) &&
-    phCalibrated &&
     telemetry.ph >= 0 &&
     telemetry.ph <= 14;
   const hasH2s = hasValue(telemetry.h2sAfter);
