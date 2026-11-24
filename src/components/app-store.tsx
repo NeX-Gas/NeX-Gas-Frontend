@@ -64,6 +64,8 @@ type AppStore = {
   cal: import("@/lib/types").CalibrationReadback | null;
   leakLatched: boolean;
   calSensor: string;
+  authCmd: boolean;
+  authMsgs: boolean;
   /** Kirim satu langkah kalibrasi bertanda tangan lewat backend. */
   calibrate: (request: CalibrationRequest) => Promise<CalibrationResult | null>;
   /** `live` = data alat asli, `demo` = simulator lokal */
@@ -474,6 +476,8 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       cal: system.cal,
       leakLatched: system.leakLatched,
       calSensor: system.calSensor,
+      authCmd: system.authCmd,
+      authMsgs: system.authMsgs,
       calibrate,
       link,
       deviceOnline: system.deviceOnline,

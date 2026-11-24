@@ -390,6 +390,35 @@ export async function postCalibration(
   };
 }
 
+export type DeviceConfigRequest = {
+  security?: { authCmd?: boolean; authMsgs?: boolean };
+  thresholds?: Record<string, number>;
+  intervals?: { sampleMs?: number; telemetryMs?: number; stateMs?: number };
+  valveMaxOpenMs?: number;
+};
+
+export async function postDeviceConfig(
+  request: DeviceConfigRequest,
+): Promise<{
+  verificationStatus: string;
+  commandId: string;
+  ack: { id: string; ok: boolean; err?: string; result?: Record<string, unknown> } | null;
+}> {
+  const body = await apiFetch("/api/device/config", {
+    method: "POST",
+    body: JSON.stringify({ deviceId: DEVICE_ID, ...request }),
+  });
+  return {
+    verificationStatus:
+      typeof body.verificationStatus === "string" ? body.verificationStatus : "pending_execution",
+    commandId: typeof body.commandId === "string" ? body.commandId : "",
+    ack:
+      body.ack && typeof body.ack === "object"
+        ? (body.ack as { id: string; ok: boolean; err?: string; result?: Record<string, unknown> })
+        : null,
+  };
+}
+
 export type FirmwareManifest = {
   file: string;
   version: string;
