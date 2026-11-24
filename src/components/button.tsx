@@ -1,4 +1,3 @@
-import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
 
@@ -80,16 +79,5 @@ export function Button({
     >
       {inner(props)}
     </button>
-  );
-}
-
-export function ButtonLink({
-  href,
-  ...props
-}: BaseProps & { href: string }) {
-  return (
-    <Link href={href} className={classes(props)}>
-      {inner(props)}
-    </Link>
   );
 }

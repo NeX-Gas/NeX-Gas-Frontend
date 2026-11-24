@@ -42,7 +42,9 @@ NEX-GAS Dashboard dirancang untuk memberikan visualisasi operasional reaktor bio
   pH 2 buffer, R0 H₂S/CH₄/ambient, offset DS18B20/DHT22, konstanta flow, tes
   valve, dan selftest. Nilai mentah dan `state.cal` ditampilkan dari alat.
 - **Kartu Firmware** di `/pengaturan` — versi terpasang, manifest terbaru,
-  tombol update OTA. Hanya admin.
+  upload `.bin` + versi/changelog, dan tombol update OTA. Hanya admin.
+- **Ambang & interval** di `/pengaturan` — memuat config retained dari alat,
+  mengubah 11 ambang, interval sampling/telemetri/state, dan watchdog valve.
 - **WebSocket butuh tiket.** Data live hanya muncul setelah login (backend
   mengeluarkan tiket 60 detik lewat `POST /api/auth/ws-ticket`). Tanpa login,
   dashboard menampilkan status offline, bukan data contoh.

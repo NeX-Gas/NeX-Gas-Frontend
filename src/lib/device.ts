@@ -32,11 +32,6 @@ export function isSensorValue(value: unknown): value is number {
   );
 }
 
-/** Ubah -1 (tidak tersedia) menjadi `null` untuk kebutuhan tampilan. */
-export function sensorValue(value: number): number | null {
-  return isSensorValue(value) ? value : null;
-}
-
 const num = (value: unknown, fallback: number) =>
   typeof value === "number" && Number.isFinite(value) ? value : fallback;
 
@@ -519,10 +514,5 @@ export const DEVICE_WS_URL =
   process.env.NEXT_PUBLIC_WS_URL ??
   process.env.NEXT_PUBLIC_DEVICE_WS_URL ??
   "wss://backend-production-4135d719.up.railway.app/ws";
-
-/** Endpoint REST backend (aksi non-realtime). */
-export const DEVICE_API_URL =
-  process.env.NEXT_PUBLIC_API_URL ??
-  "https://backend-production-4135d719.up.railway.app";
 
 export const isDemoMode = DEVICE_WS_URL.length === 0;
