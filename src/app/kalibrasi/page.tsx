@@ -447,8 +447,9 @@ function ValveCard({
   valveOpen: boolean;
   leakLatched: boolean;
 }) {
-  const { calibrate, calSensor, canCommand } = useAppStore();
+  const { calibrate, calSensor, canCommand, sendCommand, auth } = useAppStore();
   const testing = calSensor === "valve";
+  const isAdmin = auth?.user.role === "admin";
 
   return (
     <Card className="flex flex-col gap-4 p-4">
@@ -490,11 +491,23 @@ function ValveCard({
         >
           Tutup
         </BusyButton>
+        {leakLatched ? (
+          <BusyButton
+            variant="secondary"
+            disabled={!canCommand || !isAdmin}
+            onClick={async () => {
+              await sendCommand({ leak_reset: true });
+            }}
+          >
+            Reset latch kebocoran
+          </BusyButton>
+        ) : null}
       </div>
 
       <p className="text-[11px] leading-4 text-muted">
         Valve menutup otomatis setelah batas waktu. Latch kebocoran tidak bisa
-        dilewati dari sini.
+        dilewati; alat hanya mau direset setelah sensor kebocoran normal terus
+        ≥60 detik (khusus admin).
       </p>
     </Card>
   );

@@ -356,6 +356,10 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       notify("Pilih mode Manual dulu untuk mengontrol valve");
       return;
     }
+    if (s.leakLatched) {
+      notify("Ditolak: valve terkunci pengaman kebocoran — reset latch di halaman Kalibrasi");
+      return;
+    }
     if (isSensorValue(s.telemetry.leak) && s.telemetry.leak >= THRESHOLDS.leakDanger) {
       notify("Ditolak: kebocoran metana terdeteksi — valve tetap tertutup");
       return;

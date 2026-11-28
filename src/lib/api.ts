@@ -132,10 +132,31 @@ async function readJson(response: Response): Promise<Record<string, unknown>> {
   }
 }
 
+/** Kode error ACK firmware v1.1.0 (README firmware, bagian ACK). */
+const DEVICE_NACK_REASONS: Record<string, string> = {
+  latched:
+    "valve terkunci pengaman kebocoran. Reset latch di halaman Kalibrasi setelah kebocoran aman ≥60 detik.",
+  unsafe: "belum aman — sensor kebocoran harus normal terus ≥60 detik sebelum latch bisa direset.",
+  range: "nilai/mode tidak sesuai (mis. valve hanya bisa digerakkan di mode Manual).",
+  busy: "alat sedang dalam sesi kalibrasi. Selesaikan atau batalkan dulu.",
+  auth: "tanda tangan perintah tidak valid. Samakan DEVICE_TOKEN backend dengan secrets.h.",
+  ts: "jam perintah berbeda jauh dari jam alat (NTP).",
+  replay: "perintah dengan ID yang sama sudah pernah dijalankan.",
+  nosensor: "sensor tidak terdeteksi.",
+  spread: "pembacaan sensor belum stabil (sebaran >5%). Tunggu lalu ulangi.",
+  unsupported: "perintah tidak didukung firmware ini.",
+  uncalibrated: "sensor belum dikalibrasi.",
+};
+
 function describeError(status: number, body: Record<string, unknown>): string {
   const serverMessage =
     typeof body.message === "string" ? body.message : typeof body.error === "string" ? body.error : "";
 
+  // The device itself refused (firmware ACK ok:false); say why instead of blaming the broker.
+  const nack = /Device rejected command(?: \((\w+)\))?/.exec(serverMessage);
+  if (nack) {
+    return `Ditolak alat: ${DEVICE_NACK_REASONS[nack[1] ?? ""] ?? `kode ${nack[1] ?? "tidak diketahui"}`}`;
+  }
   if (serverMessage.toUpperCase().includes("PUBLIC_MQTT_TEST_MODE")) {
     return "Perintah dimatikan di PUBLIC_MQTT_TEST_MODE (mode uji broker publik) — firmware tidak boleh digerakkan dari sini.";
   }
