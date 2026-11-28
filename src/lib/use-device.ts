@@ -101,7 +101,8 @@ export function useDevice(
         const snapshot = await fetchSnapshot();
         if (isCancelled()) return;
         messagesFromSnapshot(snapshot).forEach(applyIncoming);
-        setLastError(null);
+        // Logged out, the snapshot is empty; keep the "login" hint from connect().
+        if (getSession()) setLastError(null);
       } catch (error) {
         if (isCancelled()) return;
         setLastError(
