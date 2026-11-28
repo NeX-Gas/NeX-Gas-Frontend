@@ -164,6 +164,7 @@ export type DeviceCommand =
   | { mode: ValveMode }
   | { valve: "open" | "close" }
   | { tare: true }
+  | { leak_reset: true }
   | {
       cal_pressure_point: {
         sensor: "digester" | "collector";
